@@ -1,0 +1,3 @@
+Django>=5.0,<6.0
+# Para PostgreSQL no futuro, descomente a linha abaixo:
+# psycopg[binary]>=3.1
