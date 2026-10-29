@@ -1,0 +1,98 @@
+{% extends "base.html" %}
+{% load static %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block conteudo %}
+<h1 class="titulo-pagina">{{ titulo }}</h1>
+
+<form method="post" novalidate class="ficha-form">
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+
+  <section class="cartao" aria-labelledby="s-ident">
+    <h2 id="s-ident" class="titulo-secao">Identificação</h2>
+    {% include "fichas/_campo.html" with campo=form.nome_personagem %}
+    {% if eh_mestre %}{% include "fichas/_campo.html" with campo=form.jogador %}{% endif %}
+    {% include "fichas/_campo.html" with campo=form.origem %}
+  </section>
+
+  <section class="cartao" aria-labelledby="s-atr">
+    <h2 id="s-atr" class="titulo-secao">Atributos</h2>
+    <p class="texto-suave">Cada atributo vai de 1 a 10. O livro sugere distribuir <strong>21 pontos</strong> no total; isso é só uma orientação, você pode salvar com outro total.</p>
+    <p id="pontos-resumo" class="pontos" data-meta="21" aria-live="polite">Pontos usados: —</p>
+    <div class="grade-atributos">
+      {% for c in form.atributos %}
+        {% include "fichas/_campo.html" with campo=c %}
+      {% endfor %}
+    </div>
+    <p id="maximos-resumo" class="texto-suave pequeno" aria-live="polite"></p>
+  </section>
+
+  {% if eh_mestre %}
+  <section class="cartao" aria-labelledby="s-vit">
+    <h2 id="s-vit" class="titulo-secao">Sangue Frio e Anticorpos (mestre)</h2>
+    <p class="texto-suave">Valores atuais em branco começam cheios. Máximos em branco usam o padrão (SF × 3 e RES × 10).</p>
+    <div class="grade-vitais">
+      {% include "fichas/_campo.html" with campo=form.sf_atual %}
+      {% include "fichas/_campo.html" with campo=form.sf_max_manual %}
+      {% include "fichas/_campo.html" with campo=form.anticorpos_atual %}
+      {% include "fichas/_campo.html" with campo=form.anticorpos_max_manual %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="cartao" aria-labelledby="s-prof">
+    <h2 id="s-prof" class="titulo-secao">Proficiências</h2>
+    <p class="texto-suave">Escolha a proficiência e informe nível e bônus. Para remover uma, marque “Remover”.</p>
+    {{ formset.management_form }}
+    {% for e in formset.non_form_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+    {% for f in formset %}
+    <fieldset class="linha-prof">
+      <legend class="so-leitor">Proficiência {{ forloop.counter }}</legend>
+      {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+      {% for e in f.non_field_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+      <div class="linha-prof-campos">
+        {% include "fichas/_campo.html" with campo=f.proficiencia %}
+        {% include "fichas/_campo.html" with campo=f.nivel %}
+        {% include "fichas/_campo.html" with campo=f.bonus %}
+      </div>
+      {% if f.instance.pk %}
+      <label class="marcar"><input type="checkbox" name="{{ f.DELETE.html_name }}" id="{{ f.DELETE.id_for_label }}"{% if f.DELETE.value %} checked{% endif %}> Remover esta proficiência</label>
+      {% endif %}
+    </fieldset>
+    {% endfor %}
+  </section>
+
+  <section class="cartao" aria-labelledby="s-trunfos">
+    <h2 id="s-trunfos" class="titulo-secao">Trunfos</h2>
+    {% if form.trunfos.field.queryset.exists %}
+      <div class="grupo{% if form.trunfos.errors %} grupo-erro{% endif %}">
+        <ul class="lista-marcar">
+          {% for opcao in form.trunfos %}
+          <li><label class="marcar" for="{{ opcao.id_for_label }}">{{ opcao.tag }} {{ opcao.choice_label }}</label></li>
+          {% endfor %}
+        </ul>
+        {% for e in form.trunfos.errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+      </div>
+    {% else %}
+      <p class="texto-suave">O mestre ainda não cadastrou trunfos.</p>
+    {% endif %}
+  </section>
+
+  <section class="cartao" aria-labelledby="s-perfil">
+    <h2 id="s-perfil" class="titulo-secao">Qualidades e defeitos</h2>
+    {% include "fichas/_campo.html" with campo=form.qualidades %}
+    {% include "fichas/_campo.html" with campo=form.defeitos %}
+  </section>
+
+  <section class="cartao" aria-labelledby="s-inv">
+    <h2 id="s-inv" class="titulo-secao">Inventário</h2>
+    {% include "fichas/_campo.html" with campo=form.inventario %}
+  </section>
+
+  <div class="barra-acoes">
+    <button type="submit" class="botao botao-primario">Salvar ficha</button>
+    <a class="botao botao-secundario" href="{% if ficha.pk %}{% url 'ficha_detalhe' ficha.pk %}{% else %}{% url 'ficha_lista' %}{% endif %}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
+{% block scripts %}<script src="{% static 'js/ficha.js' %}"></script>{% endblock %}
