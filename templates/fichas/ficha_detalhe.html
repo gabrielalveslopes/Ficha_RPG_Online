@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+{% block titulo %}{{ ficha.nome_personagem }}{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-pagina">
+  <div>
+    <h1 class="titulo-pagina">{{ ficha.nome_personagem }}</h1>
+    <p class="texto-suave">{{ ficha.origem|default:"Origem não definida" }}{% if eh_mestre %} — jogador: {{ ficha.jogador.get_username }}{% endif %}</p>
+  </div>
+  <div class="acoes">
+    <a class="botao botao-primario" href="{% url 'ficha_editar' ficha.pk %}">Editar ficha</a>
+    {% if eh_mestre %}<a class="botao botao-perigo-suave" href="{% url 'ficha_excluir' ficha.pk %}">Excluir</a>{% endif %}
+  </div>
+</div>
+
+<nav class="indice" aria-label="Seções da ficha">
+  <a href="#atributos">Atributos</a>
+  <a href="#vitais">Vitais</a>
+  <a href="#proficiencias">Proficiências</a>
+  <a href="#trunfos">Trunfos</a>
+  <a href="#perfil">Qualidades e defeitos</a>
+  <a href="#inventario">Inventário</a>
+  <a href="#itens">Itens encontrados</a>
+</nav>
+
+<div class="colunas">
+  <section class="cartao" id="atributos" aria-labelledby="t-atr">
+    <h2 id="t-atr" class="titulo-secao">Atributos</h2>
+    <ul class="grade-atributos-ver">
+      {% for sigla, nome, valor in ficha.atributos_lista %}
+      <li class="atributo"><span class="atributo-valor">{{ valor }}</span><span class="atributo-sigla">{{ sigla }}</span><span class="atributo-nome">{{ nome }}</span></li>
+      {% endfor %}
+    </ul>
+  </section>
+
+  <section class="cartao" id="vitais" aria-labelledby="t-vit">
+    <h2 id="t-vit" class="titulo-secao">Vitais</h2>
+    <div class="vital">
+      <label for="medidor-sf">Sangue Frio: <strong>{{ ficha.sf_atual }} de {{ ficha.sf_max }}</strong></label>
+      <progress id="medidor-sf" class="medidor medidor-sf" value="{{ ficha.sf_atual }}" max="{{ ficha.sf_max|default:1 }}">{{ ficha.sf_atual }} de {{ ficha.sf_max }}</progress>
+    </div>
+    <div class="vital">
+      <label for="medidor-ac">Anticorpos: <strong>{{ ficha.anticorpos_atual }} de {{ ficha.anticorpos_max }}</strong></label>
+      <progress id="medidor-ac" class="medidor medidor-ac" value="{{ ficha.anticorpos_atual }}" max="{{ ficha.anticorpos_max|default:1 }}">{{ ficha.anticorpos_atual }} de {{ ficha.anticorpos_max }}</progress>
+    </div>
+    <p class="pequeno texto-suave">Os valores atuais são atualizados pelo mestre.</p>
+  </section>
+
+  <section class="cartao" id="proficiencias" aria-labelledby="t-prof">
+    <h2 id="t-prof" class="titulo-secao">Proficiências</h2>
+    {% if proficiencias %}
+    <ul class="lista-simples">
+      {% for p in proficiencias %}
+      <li><strong>{{ p.proficiencia.nome }}</strong> — nível {{ p.nivel }}, bônus {{ p.bonus|stringformat:"+d" }}
+        {% if p.proficiencia.descricao %}<br><span class="pequeno texto-suave">{{ p.proficiencia.descricao }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="texto-suave">Nenhuma proficiência escolhida.</p>{% endif %}
+  </section>
+
+  <section class="cartao" id="trunfos" aria-labelledby="t-trunfos">
+    <h2 id="t-trunfos" class="titulo-secao">Trunfos</h2>
+    {% if trunfos %}
+    <ul class="lista-simples">
+      {% for t in trunfos %}
+      <li><strong>{{ t.nome }}</strong>{% if t.descricao %}<br><span class="pequeno texto-suave">{{ t.descricao }}</span>{% endif %}</li>
+      {% endfor %}
+    </ul>
+    {% else %}<p class="texto-suave">Nenhum trunfo escolhido.</p>{% endif %}
+  </section>
+
+  <section class="cartao" id="perfil" aria-labelledby="t-perfil">
+    <h2 id="t-perfil" class="titulo-secao">Qualidades e defeitos</h2>
+    <h3 class="subtitulo">Qualidades</h3>
+    {% if ficha.qualidades %}{{ ficha.qualidades|linebreaks }}{% else %}<p class="texto-suave">—</p>{% endif %}
+    <h3 class="subtitulo">Defeitos</h3>
+    {% if ficha.defeitos %}{{ ficha.defeitos|linebreaks }}{% else %}<p class="texto-suave">—</p>{% endif %}
+  </section>
+
+  <section class="cartao" id="inventario" aria-labelledby="t-inv">
+    <h2 id="t-inv" class="titulo-secao">Inventário</h2>
+    {% if ficha.inventario %}{{ ficha.inventario|linebreaks }}{% else %}<p class="texto-suave">Inventário vazio.</p>{% endif %}
+  </section>
+</div>
+
+<section class="cartao cartao-itens" id="itens" aria-labelledby="t-itens">
+  <div class="cabecalho-pagina">
+    <h2 id="t-itens" class="titulo-secao">Itens encontrados</h2>
+    <span class="carimbo carimbo-pequeno">Área privada</span>
+  </div>
+  <p class="texto-suave pequeno">
+    {% if eh_mestre %}Visível somente para você (mestre) e para {{ ficha.jogador.get_username }}.{% else %}Visível somente para você e para o mestre.{% endif %}
+  </p>
+  {% if itens %}
+  <ul class="lista-itens">
+    {% for item in itens %}
+    <li class="item">
+      <h3 class="item-nome">{{ item.nome }} <span class="qtd">× {{ item.quantidade }}</span></h3>
+      {% if item.descricao %}<p>{{ item.descricao|linebreaksbr }}</p>{% endif %}
+      {% if eh_mestre %}<div class="acoes">
+        <a class="botao botao-secundario" href="{% url 'item_editar' item.pk %}">Editar</a>
+        <a class="botao botao-perigo-suave" href="{% url 'item_excluir' item.pk %}">Excluir</a>
+      </div>{% endif %}
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}<p class="texto-suave">Nenhum item encontrado até agora.</p>{% endif %}
+  {% if eh_mestre %}<a class="botao botao-primario" href="{% url 'item_criar' %}?ficha={{ ficha.pk }}">Registrar item para {{ ficha.nome_personagem }}</a>{% endif %}
+</section>
+{% endblock %}
