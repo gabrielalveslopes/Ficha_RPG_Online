@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block titulo %}{% if eh_mestre %}Todas as fichas{% else %}Minha ficha{% endif %}{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-pagina">
+  <h1 class="titulo-pagina">{% if eh_mestre %}Todas as fichas{% else %}Minhas fichas{% endif %}</h1>
+  <a class="botao botao-primario" href="{% url 'ficha_criar' %}">Nova ficha</a>
+</div>
+
+{% if eh_mestre %}
+<form method="get" class="busca" role="search">
+  <label for="q">Buscar por personagem ou jogador</label>
+  <div class="busca-linha">
+    <input id="q" name="q" type="search" class="campo" value="{{ busca }}">
+    <button class="botao botao-secundario" type="submit">Buscar</button>
+  </div>
+</form>
+{% endif %}
+
+{% if fichas %}
+<ul class="grade-fichas">
+  {% for f in fichas %}
+  <li class="cartao ficha-resumo">
+    <h2 class="ficha-resumo-nome"><a href="{% url 'ficha_detalhe' f.pk %}">{{ f.nome_personagem }}</a></h2>
+    <p class="texto-suave">{{ f.origem|default:"Origem não definida" }}{% if eh_mestre %} — jogador: {{ f.jogador.get_username }}{% endif %}</p>
+    <p class="vitais-mini">
+      <span>Sangue Frio: <strong>{{ f.sf_atual }}/{{ f.sf_max }}</strong></span>
+      <span>Anticorpos: <strong>{{ f.anticorpos_atual }}/{{ f.anticorpos_max }}</strong></span>
+    </p>
+    {% if eh_mestre %}<p class="pequeno texto-suave">Itens encontrados: {{ f.n_itens }}</p>{% endif %}
+    <a class="botao botao-secundario" href="{% url 'ficha_detalhe' f.pk %}">Abrir ficha</a>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<section class="cartao">
+  <p>{% if busca %}Nenhuma ficha encontrada para “{{ busca }}”.{% else %}Nenhuma ficha por aqui ainda.{% endif %}</p>
+</section>
+{% endif %}
+{% endblock %}
