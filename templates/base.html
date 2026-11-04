@@ -1,0 +1,55 @@
+{% load static %}<!doctype html>
+<html lang="pt-br">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block titulo %}Fichas{% endblock %} · {{ nome_do_jogo }}</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;700&family=Special+Elite&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{% static 'css/zumbis.css' %}">
+</head>
+<body>
+  <a class="pular" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="topo">
+    <div class="topo-int">
+      <a class="marca" href="{% url 'inicio' %}">
+        <span class="marca-nome">{{ nome_do_jogo }}</span>
+        <span class="marca-sub">Registro de sobreviventes</span>
+      </a>
+      {% if user.is_authenticated %}
+      <nav class="menu" aria-label="Principal">
+        <a href="{% url 'ficha_lista' %}">{% if eh_mestre %}Todas as fichas{% else %}Minha ficha{% endif %}</a>
+        {% if eh_mestre %}
+          <a href="{% url 'item_lista' %}">Itens encontrados</a>
+          <a href="{% url 'admin:index' %}">Configurações</a>
+        {% endif %}
+        <form method="post" action="{% url 'logout' %}" class="menu-sair">
+          {% csrf_token %}
+          <span class="menu-usuario">{{ user.get_username }} ({% if eh_mestre %}mestre{% else %}jogador{% endif %})</span>
+          <button type="submit" class="botao botao-sutil">Sair</button>
+        </form>
+      </nav>
+      {% endif %}
+    </div>
+  </header>
+
+  <main id="conteudo" class="pagina" tabindex="-1">
+    {% if messages %}
+    <div class="avisos">
+      {% for m in messages %}
+      <div class="aviso aviso-{{ m.level_tag }}" role="{% if m.level_tag == 'error' %}alert{% else %}status{% endif %}">
+        <strong class="aviso-rotulo">{% if m.level_tag == 'success' %}✔ Sucesso:{% elif m.level_tag == 'error' %}✖ Erro:{% elif m.level_tag == 'warning' %}▲ Atenção:{% else %}ℹ Aviso:{% endif %}</strong>
+        {{ m }}
+      </div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% block conteudo %}{% endblock %}
+  </main>
+
+  <footer class="rodape">{{ nome_do_jogo }} · fichas online</footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block titulo %}Entrar{% endblock %}
+{% block conteudo %}
+<section class="cartao cartao-estreito">
+  <h1 class="titulo-pagina">Identifique-se, sobrevivente</h1>
+  <p class="texto-suave">Use o usuário e a senha que o mestre cadastrou para você.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% if form.non_field_errors %}
+      {% for e in form.non_field_errors %}
+      <p class="erro-campo" role="alert"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>
+      {% endfor %}
+    {% endif %}
+    {% include "fichas/_campo.html" with campo=form.username %}
+    {% include "fichas/_campo.html" with campo=form.password %}
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit" class="botao botao-primario botao-total">Entrar</button>
+  </form>
+  <p class="texto-suave pequeno">Não tem acesso? Peça ao mestre para criar seu usuário.</p>
+</section>
+{% endblock %}

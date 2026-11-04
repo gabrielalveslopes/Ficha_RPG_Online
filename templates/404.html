@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titulo %}Não encontrado{% endblock %}
+{% block conteudo %}
+<section class="cartao cartao-estreito">
+  <p class="carimbo">Não localizado</p>
+  <h1 class="titulo-pagina">Página não encontrada</h1>
+  <p>O endereço não existe ou você não tem permissão para acessar este registro.</p>
+  <a class="botao botao-primario" href="{% url 'inicio' %}">Voltar ao início</a>
+</section>
+{% endblock %}

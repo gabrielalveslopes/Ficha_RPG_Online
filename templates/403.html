@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block titulo %}Sem permissão{% endblock %}
+{% block conteudo %}
+<section class="cartao cartao-estreito">
+  <p class="carimbo">Acesso negado</p>
+  <h1 class="titulo-pagina">Você não tem permissão para ver esta página</h1>
+  <p>Esta área é restrita ao mestre. Se você acha que deveria ter acesso, fale com o mestre da mesa.</p>
+  <a class="botao botao-primario" href="{% url 'inicio' %}">Voltar ao início</a>
+</section>
+{% endblock %}
