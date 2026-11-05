@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block titulo %}Excluir item{% endblock %}
+{% block conteudo %}
+<section class="cartao cartao-estreito">
+  <h1 class="titulo-pagina">Excluir o item “{{ item.nome }}”?</h1>
+  <p>O item sumirá da ficha de {{ item.ficha.nome_personagem }}. Esta ação não pode ser desfeita.</p>
+  <form method="post" class="acoes">
+    {% csrf_token %}
+    <button type="submit" class="botao botao-perigo">Sim, excluir item</button>
+    <a class="botao botao-secundario" href="{% url 'item_lista' %}">Cancelar</a>
+  </form>
+</section>
+{% endblock %}
