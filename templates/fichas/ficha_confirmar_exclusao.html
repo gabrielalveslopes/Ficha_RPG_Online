@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block titulo %}Excluir ficha{% endblock %}
+{% block conteudo %}
+<section class="cartao cartao-estreito">
+  <h1 class="titulo-pagina">Excluir a ficha de {{ ficha.nome_personagem }}?</h1>
+  <p>Esta ação apaga também todos os itens encontrados atribuídos a esta ficha e <strong>não pode ser desfeita</strong>.</p>
+  <form method="post" class="acoes">
+    {% csrf_token %}
+    <button type="submit" class="botao botao-perigo">Sim, excluir ficha</button>
+    <a class="botao botao-secundario" href="{% url 'ficha_detalhe' ficha.pk %}">Cancelar</a>
+  </form>
+</section>
+{% endblock %}
