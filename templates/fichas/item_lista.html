@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block titulo %}Itens encontrados{% endblock %}
+{% block conteudo %}
+<div class="cabecalho-pagina">
+  <h1 class="titulo-pagina">Itens encontrados</h1>
+  <a class="botao botao-primario" href="{% url 'item_criar' %}">Registrar item</a>
+</div>
+{% if itens %}
+<ul class="lista-itens">
+  {% for item in itens %}
+  <li class="cartao item">
+    <div class="item-topo">
+      <h2 class="item-nome">{{ item.nome }} <span class="qtd">× {{ item.quantidade }}</span></h2>
+      <span class="carimbo carimbo-pequeno">Privado</span>
+    </div>
+    <p class="texto-suave">Para: <a href="{% url 'ficha_detalhe' item.ficha.pk %}">{{ item.ficha.nome_personagem }}</a> (jogador: {{ item.ficha.jogador.get_username }})</p>
+    {% if item.descricao %}<p>{{ item.descricao|linebreaksbr }}</p>{% endif %}
+    <div class="acoes">
+      <a class="botao botao-secundario" href="{% url 'item_editar' item.pk %}">Editar</a>
+      <a class="botao botao-perigo-suave" href="{% url 'item_excluir' item.pk %}">Excluir</a>
+    </div>
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<section class="cartao"><p>Nenhum item registrado ainda. Use “Registrar item” durante a exploração.</p></section>
+{% endif %}
+{% endblock %}

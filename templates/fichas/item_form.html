@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titulo %}{{ titulo }}{% endblock %}
+{% block conteudo %}
+<section class="cartao cartao-estreito">
+  <h1 class="titulo-pagina">{{ titulo }}</h1>
+  <p class="texto-suave">Somente você (mestre) e o jogador dono da ficha escolhida poderão ver este item.</p>
+  <form method="post" novalidate>
+    {% csrf_token %}
+    {% for e in form.non_field_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+    {% include "fichas/_campo.html" with campo=form.ficha %}
+    {% include "fichas/_campo.html" with campo=form.nome %}
+    {% include "fichas/_campo.html" with campo=form.descricao %}
+    {% include "fichas/_campo.html" with campo=form.quantidade %}
+    <div class="acoes">
+      <button type="submit" class="botao botao-primario">Salvar item</button>
+      <a class="botao botao-secundario" href="{% url 'item_lista' %}">Cancelar</a>
+    </div>
+  </form>
+</section>
+{% endblock %}
