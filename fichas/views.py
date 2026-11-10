@@ -14,10 +14,13 @@ from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import transaction
 from django.db.models import Count, Q
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
-from .forms import FichaJogadorForm, FichaMestreForm, ItemForm, ProficienciaFormSet
+from .forms import (
+    ArmaFormSet, FichaJogadorForm, FichaMestreForm, ItemForm, MochilaFormSet,
+)
 from .models import PONTOS_SUGERIDOS, Ficha, ItemEncontrado, eh_mestre
 
 
@@ -70,6 +73,8 @@ def ficha_detalhe(request, pk):
     ficha = _obter_ficha(request, pk)
     contexto = {
         "ficha": ficha,
+        "armas": ficha.armas.all(),
+        "mochila": ficha.mochila.all(),
         "proficiencias": ficha.proficiencias_escolhidas.select_related("proficiencia"),
         "trunfos": ficha.trunfos.all(),
         "itens": ficha.itens.all(),  # só chega aqui quem pode ver esta ficha
@@ -77,20 +82,37 @@ def ficha_detalhe(request, pk):
     return render(request, "fichas/ficha_detalhe.html", contexto)
 
 
+@login_required
+def ficha_foto(request, pk):
+    """Entrega a foto SOMENTE se o usuário pode ver a ficha (mestre ou dono)."""
+    ficha = _obter_ficha(request, pk)
+    if not ficha.foto:
+        raise Http404
+    resposta = FileResponse(ficha.foto.open("rb"), content_type="image/jpeg")
+    resposta["Cache-Control"] = "private, max-age=300"
+    resposta["X-Content-Type-Options"] = "nosniff"
+    return resposta
+
+
 def _salvar_ficha(request, ficha, titulo, novo):
     Formulario = _classe_do_formulario(request.user)
     if request.method == "POST":
-        form = Formulario(request.POST, instance=ficha)
-        formset = ProficienciaFormSet(request.POST, instance=ficha, prefix="prof")
-        if form.is_valid() and formset.is_valid():
+        form = Formulario(request.POST, request.FILES, instance=ficha)
+        armas = ArmaFormSet(request.POST, instance=ficha, prefix="arma")
+        mochila = MochilaFormSet(request.POST, instance=ficha, prefix="mochila")
+        validos = [form.is_valid(), armas.is_valid(), mochila.is_valid()]
+        if all(validos):
             with transaction.atomic():
                 salva = form.save(commit=False)
                 if not eh_mestre(request.user):
                     salva.jogador = request.user  # jogador nunca escolhe/troca o dono
                 salva.save()
                 form.save_m2m()
-                formset.instance = salva
-                formset.save()
+                form.salvar_proficiencias(salva)
+                for conjunto in (armas, mochila):
+                    conjunto.instance = salva
+                    conjunto.save()
+            form.descartar_foto_antiga(salva)
             messages.success(request, f"Ficha de {salva.nome_personagem} salva com sucesso.")
             if salva.total_atributos != PONTOS_SUGERIDOS:
                 messages.warning(
@@ -102,11 +124,13 @@ def _salvar_ficha(request, ficha, titulo, novo):
         messages.error(request, "Não foi possível salvar. Corrija os campos indicados abaixo.")
     else:
         form = Formulario(instance=ficha)
-        formset = ProficienciaFormSet(instance=ficha, prefix="prof")
+        armas = ArmaFormSet(instance=ficha, prefix="arma")
+        mochila = MochilaFormSet(instance=ficha, prefix="mochila")
     return render(
         request,
         "fichas/ficha_form.html",
-        {"form": form, "formset": formset, "titulo": titulo, "novo": novo, "ficha": ficha},
+        {"form": form, "armas": armas, "mochila": mochila,
+         "titulo": titulo, "novo": novo, "ficha": ficha},
     )
 
 

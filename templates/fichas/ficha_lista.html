@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block titulo %}{% if eh_mestre %}Todas as fichas{% else %}Minha ficha{% endif %}{% endblock %}
 {% block conteudo %}
+{% include "fichas/_faixa.html" with subtitulo="Arquivo de sobreviventes" %}
 <div class="cabecalho-pagina">
   <h1 class="titulo-pagina">{% if eh_mestre %}Todas as fichas{% else %}Minhas fichas{% endif %}</h1>
   <a class="botao botao-primario" href="{% url 'ficha_criar' %}">Nova ficha</a>
@@ -20,14 +21,19 @@
 <ul class="grade-fichas">
   {% for f in fichas %}
   <li class="cartao ficha-resumo">
-    <h2 class="ficha-resumo-nome"><a href="{% url 'ficha_detalhe' f.pk %}">{{ f.nome_personagem }}</a></h2>
-    <p class="texto-suave">{{ f.origem|default:"Origem não definida" }}{% if eh_mestre %} — jogador: {{ f.jogador.get_username }}{% endif %}</p>
-    <p class="vitais-mini">
-      <span>Sangue Frio: <strong>{{ f.sf_atual }}/{{ f.sf_max }}</strong></span>
-      <span>Anticorpos: <strong>{{ f.anticorpos_atual }}/{{ f.anticorpos_max }}</strong></span>
-    </p>
-    {% if eh_mestre %}<p class="pequeno texto-suave">Itens encontrados: {{ f.n_itens }}</p>{% endif %}
-    <a class="botao botao-secundario" href="{% url 'ficha_detalhe' f.pk %}">Abrir ficha</a>
+    <div class="miniatura">
+      {% if f.foto %}<img src="{% url 'ficha_foto' f.pk %}" alt="Foto de {{ f.nome_personagem }}" loading="lazy">{% else %}<span>Sem foto</span>{% endif %}
+    </div>
+    <div class="ficha-resumo-texto">
+      <h2 class="ficha-resumo-nome"><a href="{% url 'ficha_detalhe' f.pk %}">{{ f.nome_personagem }}</a></h2>
+      <p class="texto-suave">{{ f.origem|default:"Origem não definida" }}{% if eh_mestre %} — jogador: {{ f.jogador.get_username }}{% endif %}</p>
+      <p class="vitais-mini">
+        <span>SF: <strong>{{ f.sf_atual }}/{{ f.sf_max }}</strong></span>
+        <span>ANT: <strong>{{ f.anticorpos_atual }}/{{ f.anticorpos_max }}</strong></span>
+      </p>
+      {% if eh_mestre %}<p class="pequeno texto-suave">Itens encontrados: {{ f.n_itens }}</p>{% endif %}
+      <a class="botao botao-secundario" href="{% url 'ficha_detalhe' f.pk %}">Abrir ficha</a>
+    </div>
   </li>
   {% endfor %}
 </ul>

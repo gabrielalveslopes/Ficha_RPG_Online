@@ -28,3 +28,23 @@
   campos.forEach(function (c) { c.addEventListener("input", atualizar); });
   atualizar();
 })();
+
+// Prévia da foto escolhida (só no navegador; o servidor valida e reduz a imagem ao salvar).
+(function () {
+  var entrada = document.querySelector("input[type=file][data-previa]");
+  if (!entrada) return;
+  var imagem = document.getElementById(entrada.getAttribute("data-previa"));
+  var vazio = document.getElementById("foto-vazia");
+  if (!imagem) return;
+  entrada.addEventListener("change", function () {
+    var arquivo = entrada.files && entrada.files[0];
+    if (!arquivo || arquivo.type.indexOf("image/") !== 0) return;
+    var leitor = new FileReader();
+    leitor.onload = function (e) {
+      imagem.src = e.target.result;
+      imagem.hidden = false;
+      if (vazio) vazio.hidden = true;
+    };
+    leitor.readAsDataURL(arquivo);
+  });
+})();

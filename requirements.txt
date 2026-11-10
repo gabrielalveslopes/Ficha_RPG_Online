@@ -1,3 +1,4 @@
 Django>=5.0,<6.0
+Pillow>=10.0  # necessário para a foto do personagem
 # Para PostgreSQL no futuro, descomente a linha abaixo:
 # psycopg[binary]>=3.1

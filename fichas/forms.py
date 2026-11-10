@@ -1,17 +1,28 @@
+import uuid
+from io import BytesIO
+
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm
+from django.core.files.base import ContentFile
+from django.core.files.uploadedfile import UploadedFile
 from django.db.models import Q
 
 from .models import (
     ATRIBUTO_CAMPOS,
+    RECURSO_CAMPOS,
+    SLOT_CAMPOS,
+    Arma,
     Ficha,
     FichaProficiencia,
     ItemEncontrado,
+    ItemMochila,
     Origem,
     Proficiencia,
     Trunfo,
 )
+
+FOTO_TAMANHO_MAXIMO = 8 * 1024 * 1024  # 8 MB enviados; a foto salva é reduzida
 
 
 def estilizar(form):
@@ -21,6 +32,32 @@ def estilizar(form):
             continue
         antigas = campo.widget.attrs.get("class", "")
         campo.widget.attrs["class"] = f"{antigas} campo".strip()
+
+
+def processar_foto(arquivo):
+    """Valida e reduz a foto: JPEG de até 900 px, sem metadados (EXIF/GPS), com nome aleatório."""
+    from PIL import Image, ImageOps
+
+    if arquivo.size > FOTO_TAMANHO_MAXIMO:
+        raise forms.ValidationError("A foto é grande demais. O limite é 8 MB.")
+    try:
+        arquivo.seek(0)
+        imagem = Image.open(arquivo)
+        imagem.load()
+        imagem = ImageOps.exif_transpose(imagem)
+        if imagem.mode in ("RGBA", "LA", "P"):
+            imagem = imagem.convert("RGBA")
+            fundo = Image.new("RGB", imagem.size, (255, 255, 255))
+            fundo.paste(imagem, mask=imagem.split()[-1])
+            imagem = fundo
+        else:
+            imagem = imagem.convert("RGB")
+        imagem.thumbnail((900, 900))
+        saida = BytesIO()
+        imagem.save(saida, "JPEG", quality=85, optimize=True)
+    except Exception:
+        raise forms.ValidationError("Não foi possível ler a imagem. Envie um arquivo JPG, PNG ou WebP.")
+    return ContentFile(saida.getvalue(), name=f"{uuid.uuid4().hex}.jpg")
 
 
 class LoginForm(AuthenticationForm):
@@ -34,31 +71,40 @@ class LoginForm(AuthenticationForm):
         estilizar(self)
 
 
-def _numero():
-    return forms.NumberInput(attrs={"min": 1, "max": 10, "inputmode": "numeric"})
+def _numero(minimo=0, maximo=None):
+    attrs = {"min": minimo, "inputmode": "numeric"}
+    if maximo is not None:
+        attrs["max"] = maximo
+    return forms.NumberInput(attrs=attrs)
 
 
 class FichaJogadorForm(forms.ModelForm):
     """Campos que o JOGADOR pode editar na própria ficha."""
 
+    remover_foto = forms.BooleanField(label="Remover a foto atual", required=False)
+
     class Meta:
         model = Ficha
-        fields = ["nome_personagem", "origem", *ATRIBUTO_CAMPOS,
-                  "trunfos", "qualidades", "defeitos", "inventario"]
+        fields = [
+            "nome_personagem", "origem", "foto", *ATRIBUTO_CAMPOS,
+            "trunfos", "qualidades", "defeitos", *RECURSO_CAMPOS, *SLOT_CAMPOS,
+        ]
         widgets = {
-            **{campo: _numero() for campo in ATRIBUTO_CAMPOS},
+            **{campo: _numero(1, 10) for campo in ATRIBUTO_CAMPOS},
+            **{campo: _numero(0) for campo in RECURSO_CAMPOS},
+            "foto": forms.FileInput(attrs={"accept": "image/*", "data-previa": "previa-foto"}),
             "trunfos": forms.CheckboxSelectMultiple,
-            "qualidades": forms.Textarea(attrs={"rows": 4}),
-            "defeitos": forms.Textarea(attrs={"rows": 4}),
-            "inventario": forms.Textarea(attrs={"rows": 5}),
+            "qualidades": forms.Textarea(attrs={"rows": 6}),
+            "defeitos": forms.Textarea(attrs={"rows": 6}),
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._foto_antiga = self.instance.foto.name if (self.instance.pk and self.instance.foto) else ""
+
         # Só mostra opções ativas (mantendo as que a ficha já usa, mesmo se desativadas).
-        origem_atual = self.instance.origem_id
         self.fields["origem"].queryset = Origem.objects.filter(
-            Q(ativo=True) | Q(pk=origem_atual)
+            Q(ativo=True) | Q(pk=self.instance.origem_id)
         )
         self.fields["origem"].empty_label = "— escolha uma origem —"
         trunfos_atuais = self.instance.trunfos.all() if self.instance.pk else Trunfo.objects.none()
@@ -67,19 +113,77 @@ class FichaJogadorForm(forms.ModelForm):
         )
         for campo in ATRIBUTO_CAMPOS:
             self.fields[campo].widget.attrs["data-atributo"] = campo
+
+        # Uma caixa de bônus por proficiência do catálogo. Em branco = não possui.
+        bonus_atuais = {}
+        if self.instance.pk:
+            bonus_atuais = dict(
+                self.instance.proficiencias_escolhidas.values_list("proficiencia_id", "bonus")
+            )
+        self.proficiencias = list(
+            Proficiencia.objects.filter(Q(ativo=True) | Q(pk__in=list(bonus_atuais)))
+        )
+        for prof in self.proficiencias:
+            self.fields[f"prof_{prof.pk}"] = forms.IntegerField(
+                label=prof.nome, required=False, initial=bonus_atuais.get(prof.pk),
+                widget=forms.NumberInput(attrs={"inputmode": "numeric"}),
+            )
         estilizar(self)
 
+    # ---- grupos de campos para o template
     def atributos(self):
-        """Os sete campos de atributo, na ordem do livro (usado no template)."""
         return [self[campo] for campo in ATRIBUTO_CAMPOS]
+
+    def recursos(self):
+        return [self[campo] for campo in RECURSO_CAMPOS]
+
+    def slots(self):
+        return [self[campo] for campo in SLOT_CAMPOS]
+
+    def campos_proficiencias(self):
+        return [self[f"prof_{prof.pk}"] for prof in self.proficiencias]
+
+    # ---- foto
+    def clean_foto(self):
+        foto = self.cleaned_data.get("foto")
+        if isinstance(foto, UploadedFile):  # arquivo novo enviado agora
+            return processar_foto(foto)
+        return foto
+
+    def clean(self):
+        dados = super().clean()
+        enviou_nova = isinstance(dados.get("foto"), ContentFile)
+        if dados.get("remover_foto") and not enviou_nova:
+            dados["foto"] = False  # False = limpar o campo
+        return dados
+
+    def descartar_foto_antiga(self, ficha):
+        """Apaga do disco a foto que foi trocada ou removida."""
+        atual = ficha.foto.name if ficha.foto else ""
+        if self._foto_antiga and self._foto_antiga != atual:
+            ficha.foto.storage.delete(self._foto_antiga)
+
+    # ---- proficiências
+    def salvar_proficiencias(self, ficha):
+        for prof in self.proficiencias:
+            bonus = self.cleaned_data.get(f"prof_{prof.pk}")
+            if bonus is None:
+                FichaProficiencia.objects.filter(ficha=ficha, proficiencia=prof).delete()
+            else:
+                FichaProficiencia.objects.update_or_create(
+                    ficha=ficha, proficiencia=prof, defaults={"bonus": bonus}
+                )
 
 
 class FichaMestreForm(FichaJogadorForm):
-    """O mestre edita tudo, inclusive o jogador responsável e os valores atuais/máximos."""
+    """O mestre edita tudo, inclusive o jogador responsável e os valores de estado."""
 
     class Meta(FichaJogadorForm.Meta):
-        fields = ["jogador", *FichaJogadorForm.Meta.fields,
-                  "sf_atual", "sf_max_manual", "anticorpos_atual", "anticorpos_max_manual"]
+        fields = [
+            "jogador", *FichaJogadorForm.Meta.fields,
+            "pv", "defesa", "mov", "fadiga",
+            "sf_atual", "sf_max_manual", "anticorpos_atual", "anticorpos_max_manual",
+        ]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -89,50 +193,33 @@ class FichaMestreForm(FichaJogadorForm):
         estilizar(self)
 
 
-class ProficienciaForm(forms.ModelForm):
+class ArmaForm(forms.ModelForm):
     class Meta:
-        model = FichaProficiencia
-        fields = ["proficiencia", "nivel", "bonus"]
-        widgets = {
-            "nivel": forms.NumberInput(attrs={"min": 0, "inputmode": "numeric"}),
-            "bonus": forms.NumberInput(attrs={"inputmode": "numeric"}),
-        }
+        model = Arma
+        fields = ["nome", "ataque", "dano", "municao", "alcance_obs"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.fields["proficiencia"].queryset = Proficiencia.objects.filter(
-            Q(ativo=True) | Q(pk=self.instance.proficiencia_id)
-        )
-        self.fields["proficiencia"].empty_label = "— escolha —"
         estilizar(self)
 
 
-class BaseProficienciaFormSet(forms.BaseInlineFormSet):
-    def clean(self):
-        super().clean()
-        vistas = set()
-        for form in self.forms:
-            dados = getattr(form, "cleaned_data", None)
-            if not dados or dados.get("DELETE"):
-                continue
-            proficiencia = dados.get("proficiencia")
-            if proficiencia is None:
-                continue
-            if proficiencia.pk in vistas:
-                raise forms.ValidationError(
-                    "Você escolheu a mesma proficiência mais de uma vez. "
-                    "Escolha cada proficiência uma única vez."
-                )
-            vistas.add(proficiencia.pk)
+class ItemMochilaForm(forms.ModelForm):
+    class Meta:
+        model = ItemMochila
+        fields = ["item", "slot"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        estilizar(self)
 
 
-ProficienciaFormSet = forms.inlineformset_factory(
-    Ficha,
-    FichaProficiencia,
-    form=ProficienciaForm,
-    formset=BaseProficienciaFormSet,
-    extra=3,
-    can_delete=True,
+ArmaFormSet = forms.inlineformset_factory(
+    Ficha, Arma, form=ArmaForm, extra=4, can_delete=True
+)
+MOCHILA_MAXIMO = 15
+MochilaFormSet = forms.inlineformset_factory(
+    Ficha, ItemMochila, form=ItemMochilaForm,
+    extra=MOCHILA_MAXIMO, max_num=MOCHILA_MAXIMO, validate_max=True, can_delete=True,
 )
 
 

@@ -2,69 +2,98 @@
 {% load static %}
 {% block titulo %}{{ titulo }}{% endblock %}
 {% block conteudo %}
+{% include "fichas/_faixa.html" with subtitulo="Registro de sobrevivente" %}
 <h1 class="titulo-pagina">{{ titulo }}</h1>
 
-<form method="post" novalidate class="ficha-form">
+<form method="post" enctype="multipart/form-data" novalidate class="ficha-form">
   {% csrf_token %}
   {% for e in form.non_field_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
 
-  <section class="cartao" aria-labelledby="s-ident">
-    <h2 id="s-ident" class="titulo-secao">Identificação</h2>
-    {% include "fichas/_campo.html" with campo=form.nome_personagem %}
-    {% if eh_mestre %}{% include "fichas/_campo.html" with campo=form.jogador %}{% endif %}
-    {% include "fichas/_campo.html" with campo=form.origem %}
+  <section class="painel" aria-labelledby="s-ident">
+    <h2 id="s-ident" class="faixa-secao">Identidade</h2>
+    <div class="painel-corpo identidade-form">
+      <div class="foto-campo">
+        <figure class="foto-id">
+          {% if ficha.foto %}<img id="previa-foto" src="{% url 'ficha_foto' ficha.pk %}" alt="Foto atual de {{ ficha.nome_personagem }}">{% else %}<img id="previa-foto" alt="Prévia da foto escolhida" hidden><div class="foto-vazia" id="foto-vazia">Sem foto</div>{% endif %}
+        </figure>
+        {% include "fichas/_campo.html" with campo=form.foto %}
+        {% if ficha.foto %}<label class="marcar"><input type="checkbox" name="{{ form.remover_foto.html_name }}" id="{{ form.remover_foto.id_for_label }}"> {{ form.remover_foto.label }}</label>{% endif %}
+      </div>
+      <div>
+        {% include "fichas/_campo.html" with campo=form.nome_personagem %}
+        {% if eh_mestre %}{% include "fichas/_campo.html" with campo=form.jogador %}{% endif %}
+        {% include "fichas/_campo.html" with campo=form.origem %}
+      </div>
+    </div>
   </section>
 
-  <section class="cartao" aria-labelledby="s-atr">
-    <h2 id="s-atr" class="titulo-secao">Atributos</h2>
-    <p class="texto-suave">Cada atributo vai de 1 a 10. O livro sugere distribuir <strong>21 pontos</strong> no total; isso é só uma orientação, você pode salvar com outro total.</p>
-    <p id="pontos-resumo" class="pontos" data-meta="21" aria-live="polite">Pontos usados: —</p>
-    <div class="grade-atributos">
-      {% for c in form.atributos %}
-        {% include "fichas/_campo.html" with campo=c %}
-      {% endfor %}
+  <section class="painel" aria-labelledby="s-atr">
+    <h2 id="s-atr" class="faixa-secao">Atributos</h2>
+    <div class="painel-corpo">
+      <p class="texto-suave">Cada atributo vai de 1 a 10. O livro sugere distribuir <strong>21 pontos</strong> no total; é só uma orientação, você pode salvar com outro total.</p>
+      <p id="pontos-resumo" class="pontos" data-meta="21" aria-live="polite">Pontos usados: —</p>
+      <div class="grade-atributos">
+        {% for c in form.atributos %}{% include "fichas/_campo.html" with campo=c %}{% endfor %}
+      </div>
+      <p id="maximos-resumo" class="texto-suave pequeno" aria-live="polite"></p>
     </div>
-    <p id="maximos-resumo" class="texto-suave pequeno" aria-live="polite"></p>
   </section>
 
   {% if eh_mestre %}
-  <section class="cartao" aria-labelledby="s-vit">
-    <h2 id="s-vit" class="titulo-secao">Sangue Frio e Anticorpos (mestre)</h2>
-    <p class="texto-suave">Valores atuais em branco começam cheios. Máximos em branco usam o padrão (SF × 3 e RES × 10).</p>
-    <div class="grade-vitais">
-      {% include "fichas/_campo.html" with campo=form.sf_atual %}
-      {% include "fichas/_campo.html" with campo=form.sf_max_manual %}
-      {% include "fichas/_campo.html" with campo=form.anticorpos_atual %}
-      {% include "fichas/_campo.html" with campo=form.anticorpos_max_manual %}
+  <section class="painel" aria-labelledby="s-est">
+    <h2 id="s-est" class="faixa-secao">Estado (mestre)</h2>
+    <div class="painel-corpo">
+      <p class="texto-suave">Valores atuais de SF e ANT em branco começam cheios. Máximos em branco usam o padrão (SF × 3 e RES × 10).</p>
+      <div class="grade-vitais">
+        {% include "fichas/_campo.html" with campo=form.pv %}
+        {% include "fichas/_campo.html" with campo=form.defesa %}
+        {% include "fichas/_campo.html" with campo=form.mov %}
+        {% include "fichas/_campo.html" with campo=form.fadiga %}
+        {% include "fichas/_campo.html" with campo=form.sf_atual %}
+        {% include "fichas/_campo.html" with campo=form.sf_max_manual %}
+        {% include "fichas/_campo.html" with campo=form.anticorpos_atual %}
+        {% include "fichas/_campo.html" with campo=form.anticorpos_max_manual %}
+      </div>
     </div>
   </section>
   {% endif %}
 
-  <section class="cartao" aria-labelledby="s-prof">
-    <h2 id="s-prof" class="titulo-secao">Proficiências</h2>
-    <p class="texto-suave">Escolha a proficiência e informe nível e bônus. Para remover uma, marque “Remover”.</p>
-    {{ formset.management_form }}
-    {% for e in formset.non_form_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
-    {% for f in formset %}
-    <fieldset class="linha-prof">
-      <legend class="so-leitor">Proficiência {{ forloop.counter }}</legend>
-      {% for h in f.hidden_fields %}{{ h }}{% endfor %}
-      {% for e in f.non_field_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
-      <div class="linha-prof-campos">
-        {% include "fichas/_campo.html" with campo=f.proficiencia %}
-        {% include "fichas/_campo.html" with campo=f.nivel %}
-        {% include "fichas/_campo.html" with campo=f.bonus %}
-      </div>
-      {% if f.instance.pk %}
-      <label class="marcar"><input type="checkbox" name="{{ f.DELETE.html_name }}" id="{{ f.DELETE.id_for_label }}"{% if f.DELETE.value %} checked{% endif %}> Remover esta proficiência</label>
-      {% endif %}
-    </fieldset>
-    {% endfor %}
+  <section class="painel" aria-labelledby="s-comb">
+    <h2 id="s-comb" class="faixa-secao">Combate</h2>
+    <div class="painel-corpo">
+      <p class="texto-suave">Preencha só as linhas que precisar. Para apagar uma arma já salva, marque “Remover”.</p>
+      {{ armas.management_form }}
+      {% for e in armas.non_form_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+      {% for f in armas %}
+      <fieldset class="linha-arma">
+        <legend class="so-leitor">Arma {{ forloop.counter }}</legend>
+        {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+        {% for e in f.non_field_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+        {% include "fichas/_campo.html" with campo=f.nome %}
+        <div class="arma-numeros">
+          {% include "fichas/_campo.html" with campo=f.ataque %}
+          {% include "fichas/_campo.html" with campo=f.dano %}
+          {% include "fichas/_campo.html" with campo=f.municao %}
+        </div>
+        {% include "fichas/_campo.html" with campo=f.alcance_obs %}
+        {% if f.instance.pk %}<label class="marcar"><input type="checkbox" name="{{ f.DELETE.html_name }}" id="{{ f.DELETE.id_for_label }}"{% if f.DELETE.value %} checked{% endif %}> Remover esta arma</label>{% endif %}
+      </fieldset>
+      {% endfor %}
+    </div>
   </section>
 
-  <section class="cartao" aria-labelledby="s-trunfos">
-    <h2 id="s-trunfos" class="titulo-secao">Trunfos</h2>
-    {% if form.trunfos.field.queryset.exists %}
+  <section class="painel" aria-labelledby="s-qd">
+    <h2 id="s-qd" class="faixa-secao">Qualidades e defeitos</h2>
+    <div class="painel-corpo duas-caixas">
+      {% include "fichas/_campo.html" with campo=form.qualidades %}
+      {% include "fichas/_campo.html" with campo=form.defeitos %}
+    </div>
+  </section>
+
+  <section class="painel" aria-labelledby="s-trunfos">
+    <h2 id="s-trunfos" class="faixa-secao">Trunfos</h2>
+    <div class="painel-corpo">
+      {% if form.trunfos.field.queryset.exists %}
       <div class="grupo{% if form.trunfos.errors %} grupo-erro{% endif %}">
         <ul class="lista-marcar">
           {% for opcao in form.trunfos %}
@@ -73,20 +102,70 @@
         </ul>
         {% for e in form.trunfos.errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
       </div>
-    {% else %}
-      <p class="texto-suave">O mestre ainda não cadastrou trunfos.</p>
-    {% endif %}
+      {% else %}<p class="texto-suave">O mestre ainda não cadastrou trunfos.</p>{% endif %}
+    </div>
   </section>
 
-  <section class="cartao" aria-labelledby="s-perfil">
-    <h2 id="s-perfil" class="titulo-secao">Qualidades e defeitos</h2>
-    {% include "fichas/_campo.html" with campo=form.qualidades %}
-    {% include "fichas/_campo.html" with campo=form.defeitos %}
+  <section class="painel" aria-labelledby="s-moc">
+    <h2 id="s-moc" class="faixa-secao">Mochila (até 15 itens)</h2>
+    <div class="painel-corpo">
+      <p class="texto-suave">Para apagar um item já salvo, marque “Remover” na linha dele.</p>
+      {{ mochila.management_form }}
+      {% for e in mochila.non_form_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+      <ol class="mochila-form">
+        {% for f in mochila %}
+        <li>
+          {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+          <span class="num">{{ forloop.counter }}</span>
+          <div class="mochila-campos">
+            <div class="grupo{% if f.item.errors %} grupo-erro{% endif %}">
+              <label class="so-leitor" for="{{ f.item.id_for_label }}">Item {{ forloop.counter }}</label>
+              {{ f.item }}
+              {% for e in f.item.errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+            </div>
+            <div class="grupo">
+              <label class="so-leitor" for="{{ f.slot.id_for_label }}">Slot do item {{ forloop.counter }}</label>
+              {{ f.slot }}
+            </div>
+          </div>
+          {% if f.instance.pk %}<label class="marcar marcar-remover"><input type="checkbox" name="{{ f.DELETE.html_name }}" id="{{ f.DELETE.id_for_label }}"{% if f.DELETE.value %} checked{% endif %}> Remover</label>{% endif %}
+        </li>
+        {% endfor %}
+      </ol>
+    </div>
   </section>
 
-  <section class="cartao" aria-labelledby="s-inv">
-    <h2 id="s-inv" class="titulo-secao">Inventário</h2>
-    {% include "fichas/_campo.html" with campo=form.inventario %}
+  <div class="duas-colunas">
+    <section class="painel" aria-labelledby="s-rec">
+      <h2 id="s-rec" class="faixa-secao">Recursos</h2>
+      <div class="painel-corpo grade-recursos-form">
+        {% for c in form.recursos %}{% include "fichas/_campo.html" with campo=c %}{% endfor %}
+      </div>
+    </section>
+    <section class="painel" aria-labelledby="s-slots">
+      <h2 id="s-slots" class="faixa-secao">Slots</h2>
+      <div class="painel-corpo">
+        {% for c in form.slots %}{% include "fichas/_campo.html" with campo=c %}{% endfor %}
+      </div>
+    </section>
+  </div>
+
+  <section class="painel" aria-labelledby="s-prof">
+    <h2 id="s-prof" class="faixa-secao">Proficiências universais</h2>
+    <div class="painel-corpo">
+      <p class="texto-suave">Digite o bônus nas proficiências que o personagem possui. Deixe em branco as que ele não tem.</p>
+      {% if form.proficiencias %}
+      <div class="prof-form">
+        {% for c in form.campos_proficiencias %}
+        <div class="prof-item{% if c.errors %} grupo-erro{% endif %}">
+          <label for="{{ c.id_for_label }}">{{ c.label }}</label>
+          {{ c }}
+          {% for e in c.errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}<p class="texto-suave">O mestre ainda não cadastrou proficiências.</p>{% endif %}
+    </div>
   </section>
 
   <div class="barra-acoes">

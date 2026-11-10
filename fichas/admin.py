@@ -2,15 +2,17 @@ from django.contrib import admin
 from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 
-from .models import Ficha, FichaProficiencia, ItemEncontrado, Origem, Perfil, Proficiencia, Trunfo
+from .models import (
+    Arma, Ficha, FichaProficiencia, ItemEncontrado, ItemMochila, Origem, Perfil, Proficiencia, Trunfo,
+)
 
 
 @admin.register(Origem, Proficiencia, Trunfo)
 class CatalogoAdmin(admin.ModelAdmin):
     """Aqui o mestre ajusta origens, proficiências e trunfos quando quiser."""
 
-    list_display = ("nome", "ativo")
-    list_editable = ("ativo",)
+    list_display = ("nome", "ordem", "ativo")
+    list_editable = ("ordem", "ativo")
     search_fields = ("nome", "descricao")
 
 
@@ -19,11 +21,21 @@ class FichaProficienciaInline(admin.TabularInline):
     extra = 0
 
 
+class ArmaInline(admin.TabularInline):
+    model = Arma
+    extra = 0
+
+
+class MochilaInline(admin.TabularInline):
+    model = ItemMochila
+    extra = 0
+
+
 @admin.register(Ficha)
 class FichaAdmin(admin.ModelAdmin):
     list_display = ("nome_personagem", "jogador", "origem")
     search_fields = ("nome_personagem", "jogador__username")
-    inlines = [FichaProficienciaInline]
+    inlines = [FichaProficienciaInline, ArmaInline, MochilaInline]
 
 
 @admin.register(ItemEncontrado)

@@ -7,6 +7,7 @@ urlpatterns = [
     path("fichas/", views.ficha_lista, name="ficha_lista"),
     path("fichas/nova/", views.ficha_criar, name="ficha_criar"),
     path("fichas/<int:pk>/", views.ficha_detalhe, name="ficha_detalhe"),
+    path("fichas/<int:pk>/foto/", views.ficha_foto, name="ficha_foto"),
     path("fichas/<int:pk>/editar/", views.ficha_editar, name="ficha_editar"),
     path("fichas/<int:pk>/excluir/", views.ficha_excluir, name="ficha_excluir"),
     # Itens encontrados: somente o mestre usa estas páginas.

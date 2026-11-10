@@ -39,7 +39,7 @@ ALLOWED_HOSTS = [
     if h.strip()
 ]
 
-NOME_DO_JOGO = os.environ.get("NOME_DO_JOGO", "Zona Morta")
+NOME_DO_JOGO = os.environ.get("NOME_DO_JOGO", "A Queda de Corvus City")
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -117,6 +117,10 @@ USE_TZ = True
 STATIC_URL = "static/"
 STATICFILES_DIRS = [BASE_DIR / "static"]
 STATIC_ROOT = BASE_DIR / "staticfiles"
+
+# Fotos dos personagens. NÃO há MEDIA_URL público: as fotos só saem pela view protegida
+# `ficha_foto`, que confere se quem pede pode ver a ficha.
+MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 

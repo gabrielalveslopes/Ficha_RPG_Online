@@ -61,6 +61,9 @@ class ItemCatalogo(models.Model):
 
     nome = models.CharField("nome", max_length=100, unique=True)
     descricao = models.TextField("descrição", blank=True)
+    ordem = models.PositiveSmallIntegerField(
+        "ordem", default=0, help_text="Define a posição na ficha (menor aparece primeiro)."
+    )
     ativo = models.BooleanField(
         "disponível para novas fichas",
         default=True,
@@ -69,7 +72,7 @@ class ItemCatalogo(models.Model):
 
     class Meta:
         abstract = True
-        ordering = ["nome"]
+        ordering = ["ordem", "nome"]
 
     def __str__(self):
         return self.nome
@@ -99,13 +102,15 @@ ATRIBUTOS = [
     ("cor", "Corpo", "COR"),
     ("inteligencia", "Inteligência", "INT"),
     ("percepcao", "Percepção", "PER"),
-    ("influencia", "Influência", "INF"),
+    ("influencia", "Social", "SOC"),
     ("resistencia", "Resistência", "RES"),
     ("tecnica", "Técnica", "TEC"),
     ("sangue_frio", "Sangue Frio", "SF"),
 ]
 ATRIBUTO_CAMPOS = [campo for campo, _, _ in ATRIBUTOS]
 PONTOS_SUGERIDOS = 21  # orientação do livro; não é validação rígida
+RECURSO_CAMPOS = [f"recurso_{l}" for l in "mwetdfr"]  # M W E T D F R da ficha
+SLOT_CAMPOS = [f"slot_{n}" for n in range(1, 5)]
 
 
 def _atributo(rotulo):
@@ -141,10 +146,12 @@ class Ficha(models.Model):
         verbose_name="origem",
     )
 
+    foto = models.ImageField("foto do personagem", upload_to="fotos/", blank=True)
+
     cor = _atributo("Corpo (COR)")
     inteligencia = _atributo("Inteligência (INT)")
     percepcao = _atributo("Percepção (PER)")
-    influencia = _atributo("Influência (INF)")
+    influencia = _atributo("Social (SOC)")
     resistencia = _atributo("Resistência (RES)")
     tecnica = _atributo("Técnica (TEC)")
     sangue_frio = _atributo("Sangue Frio (SF)")
@@ -161,13 +168,28 @@ class Ficha(models.Model):
         help_text="Deixe em branco para usar o padrão: RES × 10.",
     )
 
+    # Estado (só o mestre altera): valores simples, sem regra de cálculo.
+    pv = models.PositiveSmallIntegerField("PV", null=True, blank=True)
+    defesa = models.PositiveSmallIntegerField("DEF", null=True, blank=True)
+    mov = models.PositiveSmallIntegerField("MOV", null=True, blank=True)
+    fadiga = models.PositiveSmallIntegerField("Fadiga", null=True, blank=True)
+
     trunfos = models.ManyToManyField(Trunfo, blank=True, related_name="fichas", verbose_name="trunfos")
     qualidades = models.TextField("qualidades", blank=True)
     defeitos = models.TextField("defeitos", blank=True)
-    inventario = models.TextField(
-        "inventário", blank=True,
-        help_text="Itens comuns do personagem. Os itens encontrados na exploração ficam em área separada.",
-    )
+
+    # Recursos (M W E T D F R) e os 4 slots equipados da ficha
+    recurso_m = models.PositiveSmallIntegerField("M", default=0)
+    recurso_w = models.PositiveSmallIntegerField("W", default=0)
+    recurso_e = models.PositiveSmallIntegerField("E", default=0)
+    recurso_t = models.PositiveSmallIntegerField("T", default=0)
+    recurso_d = models.PositiveSmallIntegerField("D", default=0)
+    recurso_f = models.PositiveSmallIntegerField("F", default=0)
+    recurso_r = models.PositiveSmallIntegerField("R", default=0)
+    slot_1 = models.CharField("Slot 1", max_length=120, blank=True)
+    slot_2 = models.CharField("Slot 2", max_length=120, blank=True)
+    slot_3 = models.CharField("Slot 3", max_length=120, blank=True)
+    slot_4 = models.CharField("Slot 4", max_length=120, blank=True)
 
     criada_em = models.DateTimeField(auto_now_add=True)
     atualizada_em = models.DateTimeField(auto_now=True)
@@ -198,6 +220,14 @@ class Ficha(models.Model):
         return [(sigla, nome, getattr(self, campo)) for campo, nome, sigla in ATRIBUTOS]
 
     @property
+    def recursos_lista(self):
+        return [(c[-1].upper(), getattr(self, c)) for c in RECURSO_CAMPOS]
+
+    @property
+    def slots_lista(self):
+        return [(n, getattr(self, f"slot_{n}")) for n in range(1, 5)]
+
+    @property
     def total_atributos(self):
         return sum(getattr(self, campo) for campo in ATRIBUTO_CAMPOS)
 
@@ -217,7 +247,6 @@ class FichaProficiencia(models.Model):
     proficiencia = models.ForeignKey(
         Proficiencia, on_delete=models.PROTECT, verbose_name="proficiência"
     )
-    nivel = models.PositiveSmallIntegerField("nível", default=1)
     bonus = models.SmallIntegerField("bônus", default=0)
 
     class Meta:
@@ -231,7 +260,40 @@ class FichaProficiencia(models.Model):
         verbose_name_plural = "proficiências da ficha"
 
     def __str__(self):
-        return f"{self.proficiencia} (nível {self.nivel}, bônus {self.bonus:+d})"
+        return f"{self.proficiencia} ({self.bonus:+d})"
+
+
+class Arma(models.Model):
+    ficha = models.ForeignKey(Ficha, on_delete=models.CASCADE, related_name="armas")
+    nome = models.CharField("arma", max_length=100)
+    ataque = models.CharField("ataque", max_length=30, blank=True)
+    dano = models.CharField("dano", max_length=30, blank=True)
+    municao = models.CharField("munição", max_length=30, blank=True)
+    alcance_obs = models.CharField("alcance / obs.", max_length=150, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "arma"
+        verbose_name_plural = "armas"
+
+    def __str__(self):
+        return self.nome
+
+
+class ItemMochila(models.Model):
+    """Mochila do personagem (até 15 itens na ficha). Diferente dos itens encontrados."""
+
+    ficha = models.ForeignKey(Ficha, on_delete=models.CASCADE, related_name="mochila")
+    item = models.CharField("item", max_length=150)
+    slot = models.CharField("slot", max_length=30, blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "item da mochila"
+        verbose_name_plural = "itens da mochila"
+
+    def __str__(self):
+        return self.item
 
 
 # ------------------------------------------------------ Itens encontrados ----
