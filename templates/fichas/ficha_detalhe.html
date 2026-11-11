@@ -118,7 +118,8 @@
     {% if mochila %}
     <ol class="lista-mochila">
       {% for m in mochila %}
-      <li><span class="num">{{ forloop.counter }}</span><span class="caixa">{{ m.item }}</span><span class="caixa caixa-slot"><span class="so-leitor">Slot: </span>{{ m.slot|default:"—" }}</span></li>
+      <li><span class="num">{{ forloop.counter }}</span><span class="caixa">{{ m.item }}</span><span class="caixa caixa-slot"><span class="so-leitor">Slot: </span>{{ m.slot|default:"—" }}</span>
+        <form method="post" action="{% url 'mochila_deixar' m.pk %}" class="form-inline">{% csrf_token %}<button type="submit" class="botao botao-sutil botao-mini" aria-label="Deixar {{ m.item }}">Deixar</button></form></li>
       {% endfor %}
     </ol>
     {% else %}<p class="texto-suave">Mochila vazia.</p>{% endif %}
@@ -167,12 +168,16 @@
     <ul class="lista-itens">
       {% for item in itens %}
       <li class="item">
-        <h3 class="item-nome">{{ item.nome }} <span class="qtd">× {{ item.quantidade }}</span></h3>
+        <h3 class="item-nome">{{ item.nome }} <span class="qtd">× {{ item.quantidade }}</span>{% if item.deixado %} <span class="etiqueta">Deixado</span>{% endif %}</h3>
         {% if item.descricao %}<p>{{ item.descricao|linebreaksbr }}</p>{% endif %}
-        {% if eh_mestre %}<div class="acoes">
+        <div class="acoes">
+          <form method="post" action="{% url 'item_pegar' item.pk %}" class="form-inline">{% csrf_token %}<button type="submit" class="botao botao-primario">Pegar (vai para a mochila)</button></form>
+          {% if not item.deixado %}<form method="post" action="{% url 'item_deixar' item.pk %}" class="form-inline">{% csrf_token %}<button type="submit" class="botao botao-secundario">Deixar</button></form>{% endif %}
+          {% if eh_mestre %}
           <a class="botao botao-secundario" href="{% url 'item_editar' item.pk %}">Editar</a>
           <a class="botao botao-perigo" href="{% url 'item_excluir' item.pk %}">Excluir</a>
-        </div>{% endif %}
+          {% endif %}
+        </div>
       </li>
       {% endfor %}
     </ul>

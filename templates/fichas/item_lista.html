@@ -10,7 +10,7 @@
   {% for item in itens %}
   <li class="cartao item">
     <div class="item-topo">
-      <h2 class="item-nome">{{ item.nome }} <span class="qtd">× {{ item.quantidade }}</span></h2>
+      <h2 class="item-nome">{{ item.nome }} <span class="qtd">× {{ item.quantidade }}</span>{% if item.deixado %} <span class="etiqueta">Deixado</span>{% endif %}</h2>
       <span class="carimbo carimbo-pequeno">Privado</span>
     </div>
     <p class="texto-suave">Para: <a href="{% url 'ficha_detalhe' item.ficha.pk %}">{{ item.ficha.nome_personagem }}</a> (jogador: {{ item.ficha.jogador.get_username }})</p>
