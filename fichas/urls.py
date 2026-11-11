@@ -15,4 +15,8 @@ urlpatterns = [
     path("itens/novo/", views.item_criar, name="item_criar"),
     path("itens/<int:pk>/editar/", views.item_editar, name="item_editar"),
     path("itens/<int:pk>/excluir/", views.item_excluir, name="item_excluir"),
+    # Pegar / deixar: botões na ficha (mestre ou dono da ficha), só POST.
+    path("itens/<int:pk>/pegar/", views.item_pegar, name="item_pegar"),
+    path("itens/<int:pk>/deixar/", views.item_deixar, name="item_deixar"),
+    path("mochila/<int:pk>/deixar/", views.mochila_deixar, name="mochila_deixar"),
 ]

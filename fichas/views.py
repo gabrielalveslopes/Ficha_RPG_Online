@@ -19,9 +19,9 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    ArmaFormSet, FichaJogadorForm, FichaMestreForm, ItemForm, MochilaFormSet,
+    MOCHILA_MAXIMO, ArmaFormSet, FichaJogadorForm, FichaMestreForm, ItemForm, MochilaFormSet,
 )
-from .models import PONTOS_SUGERIDOS, Ficha, ItemEncontrado, eh_mestre
+from .models import PONTOS_SUGERIDOS, Ficha, ItemEncontrado, ItemMochila, eh_mestre
 
 
 def mestre_required(view):
@@ -211,3 +211,57 @@ def item_excluir(request, pk):
         messages.success(request, f"Item “{nome}” excluído.")
         return redirect("item_lista")
     return render(request, "fichas/item_confirmar_exclusao.html", {"item": item})
+
+
+# ------------------------------------------------ Pegar / Deixar (jogador e mestre) ----
+# Só aceitam POST (botões em formulário com CSRF). O acesso vale para quem pode ver a ficha:
+# o mestre ou o dono. Para qualquer outra pessoa a resposta é 404.
+@login_required
+@require_POST
+def item_pegar(request, pk):
+    """Item encontrado -> mochila do personagem."""
+    item = get_object_or_404(
+        ItemEncontrado.objects.visiveis_para(request.user).select_related("ficha"), pk=pk
+    )
+    ficha = item.ficha
+    if ficha.mochila.count() >= MOCHILA_MAXIMO:
+        messages.error(
+            request,
+            f"A mochila está cheia ({MOCHILA_MAXIMO} itens). Deixe algum item antes de pegar “{item.nome}”.",
+        )
+        return redirect("ficha_detalhe", pk=ficha.pk)
+    nome = f"{item.nome} (×{item.quantidade})" if item.quantidade > 1 else item.nome
+    with transaction.atomic():
+        ItemMochila.objects.create(ficha=ficha, item=nome[:150])
+        item.delete()
+    messages.success(request, f"{ficha.nome_personagem} pegou “{item.nome}” e guardou na mochila.")
+    return redirect("ficha_detalhe", pk=ficha.pk)
+
+
+@login_required
+@require_POST
+def item_deixar(request, pk):
+    """Item encontrado que o personagem escolhe NÃO pegar: fica marcado como deixado."""
+    item = get_object_or_404(
+        ItemEncontrado.objects.visiveis_para(request.user).select_related("ficha"), pk=pk
+    )
+    item.deixado = True
+    item.save(update_fields=["deixado"])
+    messages.success(request, f"“{item.nome}” foi deixado para trás. Dá para pegá-lo depois.")
+    return redirect("ficha_detalhe", pk=item.ficha.pk)
+
+
+@login_required
+@require_POST
+def mochila_deixar(request, pk):
+    """Item da mochila -> volta para os itens encontrados, marcado como deixado."""
+    visiveis = Ficha.objects.visiveis_para(request.user)
+    item = get_object_or_404(ItemMochila.objects.select_related("ficha").filter(ficha__in=visiveis), pk=pk)
+    ficha = item.ficha
+    with transaction.atomic():
+        ItemEncontrado.objects.create(
+            ficha=ficha, nome=item.item[:120], quantidade=1, deixado=True, criado_por=request.user
+        )
+        item.delete()
+    messages.success(request, f"{ficha.nome_personagem} deixou “{item.item}” para trás.")
+    return redirect("ficha_detalhe", pk=ficha.pk)
