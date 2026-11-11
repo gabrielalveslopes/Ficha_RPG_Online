@@ -316,6 +316,10 @@ class ItemEncontrado(models.Model):
     quantidade = models.PositiveIntegerField(
         "quantidade", default=1, validators=[MinValueValidator(1)]
     )
+    deixado = models.BooleanField(
+        "deixado", default=False,
+        help_text="Marcado quando o jogador deixou o item para trás (ele continua podendo pegá-lo).",
+    )
     criado_por = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.SET_NULL, null=True, blank=True, related_name="+"
     )
