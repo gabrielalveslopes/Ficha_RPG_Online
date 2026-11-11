@@ -8,7 +8,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Ficha, ItemEncontrado, Papel, Proficiencia, eh_mestre
+from .models import Ficha, ItemEncontrado, ItemMochila, Papel, Proficiencia, eh_mestre
 
 User = get_user_model()
 SENHA = "senha-de-teste-123"
@@ -211,3 +211,65 @@ class FotoETestes(TestCase):
         self.assertEqual(self.ficha_ana.proficiencias_escolhidas.get().bonus, 2)
         self.client.post(url, dados_ficha(nome_personagem="Ana", **{f"prof_{prof.pk}": ""}))
         self.assertFalse(self.ficha_ana.proficiencias_escolhidas.exists())
+
+
+class PegarEDeixarTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.ana = User.objects.create_user("ana", password=SENHA)
+        cls.bruno = User.objects.create_user("bruno", password=SENHA)
+        cls.mestre = User.objects.create_user("mestre", password=SENHA)
+        cls.mestre.perfil.papel = Papel.MESTRE
+        cls.mestre.perfil.save()
+        cls.ficha = Ficha.objects.create(jogador=cls.ana, nome_personagem="Ana")
+        cls.item = ItemEncontrado.objects.create(ficha=cls.ficha, nome="Lanterna", quantidade=2)
+
+    def test_pegar_move_para_a_mochila(self):
+        self.client.login(username="ana", password=SENHA)
+        r = self.client.post(reverse("item_pegar", args=[self.item.pk]))
+        self.assertEqual(r.status_code, 302)
+        self.assertFalse(ItemEncontrado.objects.filter(pk=self.item.pk).exists())
+        self.assertEqual(self.ficha.mochila.get().item, "Lanterna (×2)")
+
+    def test_pegar_por_get_nao_funciona(self):
+        self.client.login(username="ana", password=SENHA)
+        self.assertEqual(self.client.get(reverse("item_pegar", args=[self.item.pk])).status_code, 405)
+
+    def test_outro_jogador_nao_pega_nem_deixa(self):
+        self.client.login(username="bruno", password=SENHA)
+        self.assertEqual(self.client.post(reverse("item_pegar", args=[self.item.pk])).status_code, 404)
+        self.assertEqual(self.client.post(reverse("item_deixar", args=[self.item.pk])).status_code, 404)
+        self.assertTrue(ItemEncontrado.objects.filter(pk=self.item.pk).exists())
+        self.assertEqual(self.ficha.mochila.count(), 0)
+
+    def test_mochila_cheia_bloqueia(self):
+        for n in range(15):
+            ItemMochila.objects.create(ficha=self.ficha, item=f"Item {n}")
+        self.client.login(username="ana", password=SENHA)
+        self.client.post(reverse("item_pegar", args=[self.item.pk]))
+        self.assertTrue(ItemEncontrado.objects.filter(pk=self.item.pk).exists())
+        self.assertEqual(self.ficha.mochila.count(), 15)
+
+    def test_deixar_item_encontrado_marca_como_deixado(self):
+        self.client.login(username="ana", password=SENHA)
+        self.client.post(reverse("item_deixar", args=[self.item.pk]))
+        self.item.refresh_from_db()
+        self.assertTrue(self.item.deixado)
+
+    def test_deixar_item_da_mochila_volta_para_encontrados(self):
+        mochila = ItemMochila.objects.create(ficha=self.ficha, item="Faca")
+        self.client.login(username="ana", password=SENHA)
+        self.client.post(reverse("mochila_deixar", args=[mochila.pk]))
+        self.assertFalse(ItemMochila.objects.filter(pk=mochila.pk).exists())
+        self.assertTrue(ItemEncontrado.objects.filter(ficha=self.ficha, nome="Faca", deixado=True).exists())
+
+    def test_mochila_de_outro_jogador_nao_pode_ser_mexida(self):
+        mochila = ItemMochila.objects.create(ficha=self.ficha, item="Faca")
+        self.client.login(username="bruno", password=SENHA)
+        self.assertEqual(self.client.post(reverse("mochila_deixar", args=[mochila.pk])).status_code, 404)
+        self.assertTrue(ItemMochila.objects.filter(pk=mochila.pk).exists())
+
+    def test_mestre_pode_pegar_pelo_jogador(self):
+        self.client.login(username="mestre", password=SENHA)
+        self.client.post(reverse("item_pegar", args=[self.item.pk]))
+        self.assertEqual(self.ficha.mochila.count(), 1)
