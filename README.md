@@ -57,6 +57,14 @@ A foto é reduzida para no máximo 900 px, convertida em JPEG e **sem metadados*
 na pasta `media/` (fora do Git). **Não existe endereço público para as fotos**: elas só saem pela
 página protegida `/fichas/<n>/foto/`, que confere se quem pede é o mestre ou o dono da ficha.
 
+## 2c. Pegar e deixar itens
+
+Na ficha, cada item encontrado tem os botões **Pegar** e **Deixar**; cada item da mochila tem **Deixar**.
+- **Pegar:** o item sai dos itens encontrados e entra na mochila (se a mochila já tiver 15 itens, aparece um erro). Se a quantidade for maior que 1, ela vai no nome, ex.: “Lanterna (×2)”.
+- **Deixar** (item encontrado): fica marcado como “Deixado”, mas continua na área privada para ser pego depois.
+- **Deixar** (item da mochila): sai da mochila e volta para os itens encontrados, marcado como “Deixado”.
+Mestre e dono da ficha podem usar os botões; qualquer outra pessoa recebe 404. Os botões só aceitam POST (com CSRF).
+
 ## 3. Configurar origens, proficiências e trunfos
 
 Em **Configurações** (`/admin/`) edite *Origens*, *Proficiências* e *Trunfos*. Desmarcar
