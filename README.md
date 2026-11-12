@@ -114,7 +114,8 @@ Para rodar as versões automáticas destas verificações: `python manage.py tes
 - **Estado:** PV, DEF, MOV e FADIGA são números simples, editados só pelo mestre (como SF e ANT atuais). Recursos (M W E T D F R) e slots podem ser editados pelo jogador.
 - **Mochila:** até 15 itens com “slot”; é separada dos itens encontrados.
 - **Itens encontrados:** tabela separada, só o mestre cria/edita.
-- **Um jogador pode ter mais de uma ficha** (ex.: personagem novo); cada uma é só dele.
+- **Uma ficha por jogador:** o jogador não consegue criar uma segunda (o botão some e o servidor bloqueia). O mestre pode ter várias fichas no próprio usuário (para NPCs), mas não cria uma segunda para um jogador.
+- **Tipo de mochila:** comum (10 slots) ou militar (15 slots), escolhido na ficha no quadro “Slots”. O servidor recusa mais itens do que a mochila comporta e o botão “Pegar” respeita o limite. Hoje o jogador escolhe o tipo sozinho; se quiser que só o mestre decida, é só mover o campo para o formulário do mestre.
 - **Erro de acesso:** ficha de outra pessoa dá 404 (não revela que existe); área só do mestre dá 403.
 - Não tenho o livro do sistema: os conteúdos de exemplo são fictícios.
 
