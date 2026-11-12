@@ -10,6 +10,8 @@ from django.db.models import Q
 
 from .models import (
     ATRIBUTO_CAMPOS,
+    CAPACIDADE_MOCHILA,
+    MOCHILA_MAXIMO,
     RECURSO_CAMPOS,
     SLOT_CAMPOS,
     Arma,
@@ -20,6 +22,7 @@ from .models import (
     Origem,
     Proficiencia,
     Trunfo,
+    eh_mestre,
 )
 
 FOTO_TAMANHO_MAXIMO = 8 * 1024 * 1024  # 8 MB enviados; a foto salva é reduzida
@@ -87,11 +90,14 @@ class FichaJogadorForm(forms.ModelForm):
         model = Ficha
         fields = [
             "nome_personagem", "origem", "foto", *ATRIBUTO_CAMPOS,
-            "trunfos", "qualidades", "defeitos", *RECURSO_CAMPOS, *SLOT_CAMPOS,
+            "trunfos", "qualidades", "defeitos", *RECURSO_CAMPOS, *SLOT_CAMPOS, "tipo_mochila",
         ]
         widgets = {
             **{campo: _numero(1, 10) for campo in ATRIBUTO_CAMPOS},
             **{campo: _numero(0) for campo in RECURSO_CAMPOS},
+            "tipo_mochila": forms.Select(attrs={
+                "data-capacidades": ",".join(f"{k}:{v}" for k, v in CAPACIDADE_MOCHILA.items())
+            }),
             "foto": forms.FileInput(attrs={"accept": "image/*", "data-previa": "previa-foto"}),
             "trunfos": forms.CheckboxSelectMultiple,
             "qualidades": forms.Textarea(attrs={"rows": 6}),
@@ -185,6 +191,17 @@ class FichaMestreForm(FichaJogadorForm):
             "sf_atual", "sf_max_manual", "anticorpos_atual", "anticorpos_max_manual",
         ]
 
+    def clean_jogador(self):
+        """Cada jogador (que não é mestre) pode ter UMA ficha. Mestres podem ter várias (NPCs)."""
+        jogador = self.cleaned_data["jogador"]
+        if not eh_mestre(jogador):
+            outras = Ficha.objects.filter(jogador=jogador).exclude(pk=self.instance.pk)
+            if outras.exists():
+                raise forms.ValidationError(
+                    "Este jogador já tem uma ficha. Cada jogador pode ter apenas uma."
+                )
+        return jogador
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         usuarios = get_user_model().objects.filter(is_active=True).order_by("username")
@@ -207,6 +224,7 @@ class ItemMochilaForm(forms.ModelForm):
     class Meta:
         model = ItemMochila
         fields = ["item", "slot"]
+        widgets = {"item": forms.TextInput(attrs={"data-mochila-item": ""})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -216,9 +234,29 @@ class ItemMochilaForm(forms.ModelForm):
 ArmaFormSet = forms.inlineformset_factory(
     Ficha, Arma, form=ArmaForm, extra=4, can_delete=True
 )
-MOCHILA_MAXIMO = 15
+
+
+class BaseMochilaFormSet(forms.BaseInlineFormSet):
+    """Confere se a quantidade de itens cabe na mochila escolhida (comum 10, militar 15)."""
+
+    capacidade = MOCHILA_MAXIMO  # a view ajusta conforme o tipo de mochila enviado
+
+    def clean(self):
+        super().clean()
+        ocupados = sum(
+            1 for f in self.forms
+            if getattr(f, "cleaned_data", None)
+            and f.cleaned_data.get("item") and not f.cleaned_data.get("DELETE")
+        )
+        if ocupados > self.capacidade:
+            raise forms.ValidationError(
+                f"A mochila escolhida comporta {self.capacidade} itens, mas há {ocupados}. "
+                "Remova itens ou escolha a mochila militar."
+            )
+
+
 MochilaFormSet = forms.inlineformset_factory(
-    Ficha, ItemMochila, form=ItemMochilaForm,
+    Ficha, ItemMochila, form=ItemMochilaForm, formset=BaseMochilaFormSet,
     extra=MOCHILA_MAXIMO, max_num=MOCHILA_MAXIMO, validate_max=True, can_delete=True,
 )
 
