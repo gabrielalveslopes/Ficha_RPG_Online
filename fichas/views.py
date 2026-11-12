@@ -19,9 +19,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    MOCHILA_MAXIMO, ArmaFormSet, FichaJogadorForm, FichaMestreForm, ItemForm, MochilaFormSet,
+    ArmaFormSet, FichaJogadorForm, FichaMestreForm, ItemForm, MochilaFormSet,
 )
-from .models import PONTOS_SUGERIDOS, Ficha, ItemEncontrado, ItemMochila, eh_mestre
+from .models import (
+    CAPACIDADE_MOCHILA, PONTOS_SUGERIDOS, Ficha, ItemEncontrado, ItemMochila, TipoMochila, eh_mestre,
+)
 
 
 def mestre_required(view):
@@ -65,7 +67,11 @@ def ficha_lista(request):
             fichas = fichas.filter(
                 Q(nome_personagem__icontains=busca) | Q(jogador__username__icontains=busca)
             )
-    return render(request, "fichas/ficha_lista.html", {"fichas": fichas, "busca": busca})
+    # Jogador só pode criar ficha se ainda não tiver uma. O mestre pode sempre.
+    pode_criar = eh_mestre(request.user) or not fichas.exists()
+    return render(
+        request, "fichas/ficha_lista.html", {"fichas": fichas, "busca": busca, "pode_criar": pode_criar}
+    )
 
 
 @login_required
@@ -100,6 +106,9 @@ def _salvar_ficha(request, ficha, titulo, novo):
         form = Formulario(request.POST, request.FILES, instance=ficha)
         armas = ArmaFormSet(request.POST, instance=ficha, prefix="arma")
         mochila = MochilaFormSet(request.POST, instance=ficha, prefix="mochila")
+        mochila.capacidade = CAPACIDADE_MOCHILA.get(
+            request.POST.get("tipo_mochila"), CAPACIDADE_MOCHILA[TipoMochila.COMUM]
+        )
         validos = [form.is_valid(), armas.is_valid(), mochila.is_valid()]
         if all(validos):
             with transaction.atomic():
@@ -136,6 +145,11 @@ def _salvar_ficha(request, ficha, titulo, novo):
 
 @login_required
 def ficha_criar(request):
+    if not eh_mestre(request.user):
+        existente = Ficha.objects.filter(jogador=request.user).first()
+        if existente:
+            messages.warning(request, "Cada jogador pode ter apenas uma ficha. Esta é a sua.")
+            return redirect("ficha_detalhe", pk=existente.pk)
     return _salvar_ficha(request, Ficha(), "Nova ficha", novo=True)
 
 
@@ -224,10 +238,11 @@ def item_pegar(request, pk):
         ItemEncontrado.objects.visiveis_para(request.user).select_related("ficha"), pk=pk
     )
     ficha = item.ficha
-    if ficha.mochila.count() >= MOCHILA_MAXIMO:
+    if ficha.mochila.count() >= ficha.capacidade_mochila:
         messages.error(
             request,
-            f"A mochila está cheia ({MOCHILA_MAXIMO} itens). Deixe algum item antes de pegar “{item.nome}”.",
+            f"A mochila está cheia ({ficha.capacidade_mochila} itens). "
+            f"Deixe algum item antes de pegar “{item.nome}”.",
         )
         return redirect("ficha_detalhe", pk=ficha.pk)
     nome = f"{item.nome} (×{item.quantidade})" if item.quantidade > 1 else item.nome
