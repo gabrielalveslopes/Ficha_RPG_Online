@@ -24,6 +24,8 @@ def dados_ficha(**extra):
     base = {
         "nome_personagem": "Teste", "cor": 3, "inteligencia": 3, "percepcao": 3,
         "influencia": 3, "resistencia": 3, "tecnica": 3, "sangue_frio": 3,
+        "recurso_m": 0, "recurso_w": 0, "recurso_e": 0, "recurso_t": 0,
+        "recurso_d": 0, "recurso_f": 0, "recurso_r": 0, "tipo_mochila": "comum",
         **FORMSETS_VAZIOS,
     }
     base.update(extra)
@@ -93,9 +95,49 @@ class PermissoesTest(TestCase):
         self.assertNotEqual(self.ficha_ana.sf_atual, 99)  # campo do mestre ignorado
 
     def test_jogador_cria_ficha_sempre_como_dono(self):
+        carla = User.objects.create_user("carla", password=SENHA)  # ainda sem ficha
+        self.entrar("carla")
+        self.client.post(reverse("ficha_criar"), dados_ficha(nome_personagem="Nova", jogador=self.bruno.pk))
+        self.assertTrue(Ficha.objects.filter(nome_personagem="Nova", jogador=carla).exists())
+        self.assertFalse(Ficha.objects.filter(nome_personagem="Nova", jogador=self.bruno).exists())
+
+    def test_jogador_so_pode_ter_uma_ficha(self):
+        self.entrar("ana")  # ana já tem a "Ana Sobrevivente"
+        r = self.client.get(reverse("ficha_criar"))
+        self.assertRedirects(r, reverse("ficha_detalhe", args=[self.ficha_ana.pk]))
+        self.client.post(reverse("ficha_criar"), dados_ficha(nome_personagem="Segunda"))
+        self.assertEqual(Ficha.objects.filter(jogador=self.ana).count(), 1)
+        self.assertNotContains(self.client.get(reverse("ficha_lista")), "Nova ficha")
+
+    def test_mestre_nao_cria_segunda_ficha_para_jogador(self):
+        self.entrar("mestre")
+        r = self.client.post(reverse("ficha_criar"), dados_ficha(nome_personagem="Dupla", jogador=self.ana.pk))
+        self.assertEqual(r.status_code, 200)  # volta ao formulário com erro
+        self.assertFalse(Ficha.objects.filter(nome_personagem="Dupla").exists())
+
+    def test_mestre_pode_criar_ficha_de_npc_no_proprio_usuario(self):
+        self.entrar("mestre")
+        for nome in ("Zumbi A", "Zumbi B"):
+            self.client.post(reverse("ficha_criar"), dados_ficha(nome_personagem=nome, jogador=self.mestre.pk))
+        self.assertEqual(Ficha.objects.filter(jogador=self.mestre).count(), 2)
+
+    def test_capacidade_da_mochila_comum_e_militar(self):
         self.entrar("ana")
-        self.client.post(reverse("ficha_criar"), dados_ficha(nome_personagem="Outra", jogador=self.bruno.pk))
-        self.assertTrue(Ficha.objects.filter(nome_personagem="Outra", jogador=self.ana).exists())
+        url = reverse("ficha_editar", args=[self.ficha_ana.pk])
+
+        def dados(tipo, qtd):
+            d = dados_ficha(nome_personagem="Ana", tipo_mochila=tipo)
+            d.update({"mochila-TOTAL_FORMS": str(qtd), "mochila-INITIAL_FORMS": "0"})
+            for n in range(qtd):
+                d[f"mochila-{n}-item"] = f"Item {n}"
+            return d
+
+        r = self.client.post(url, dados("comum", 11))
+        self.assertEqual(r.status_code, 200)  # 11 não cabe na comum
+        self.assertEqual(self.ficha_ana.mochila.count(), 0)
+        r = self.client.post(url, dados("militar", 11))
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.ficha_ana.mochila.count(), 11)
 
     # --- itens
     def test_jogador_nao_acessa_telas_de_itens(self):
@@ -243,12 +285,21 @@ class PegarEDeixarTest(TestCase):
         self.assertEqual(self.ficha.mochila.count(), 0)
 
     def test_mochila_cheia_bloqueia(self):
-        for n in range(15):
+        for n in range(10):  # mochila comum comporta 10
             ItemMochila.objects.create(ficha=self.ficha, item=f"Item {n}")
         self.client.login(username="ana", password=SENHA)
         self.client.post(reverse("item_pegar", args=[self.item.pk]))
         self.assertTrue(ItemEncontrado.objects.filter(pk=self.item.pk).exists())
-        self.assertEqual(self.ficha.mochila.count(), 15)
+        self.assertEqual(self.ficha.mochila.count(), 10)
+
+    def test_mochila_militar_comporta_mais(self):
+        self.ficha.tipo_mochila = "militar"
+        self.ficha.save()
+        for n in range(10):
+            ItemMochila.objects.create(ficha=self.ficha, item=f"Item {n}")
+        self.client.login(username="ana", password=SENHA)
+        self.client.post(reverse("item_pegar", args=[self.item.pk]))
+        self.assertEqual(self.ficha.mochila.count(), 11)
 
     def test_deixar_item_encontrado_marca_como_deixado(self):
         self.client.login(username="ana", password=SENHA)
