@@ -4,7 +4,7 @@
 {% include "fichas/_faixa.html" with subtitulo="Arquivo de sobreviventes" %}
 <div class="cabecalho-pagina">
   <h1 class="titulo-pagina">{% if eh_mestre %}Todas as fichas{% else %}Minhas fichas{% endif %}</h1>
-  <a class="botao botao-primario" href="{% url 'ficha_criar' %}">Nova ficha</a>
+  {% if pode_criar %}<a class="botao botao-primario" href="{% url 'ficha_criar' %}">Nova ficha</a>{% endif %}
 </div>
 
 {% if eh_mestre %}
@@ -39,7 +39,7 @@
 </ul>
 {% else %}
 <section class="cartao">
-  <p>{% if busca %}Nenhuma ficha encontrada para “{{ busca }}”.{% else %}Nenhuma ficha por aqui ainda.{% endif %}</p>
+  <p>{% if busca %}Nenhuma ficha encontrada para “{{ busca }}”.{% elif eh_mestre %}Nenhuma ficha por aqui ainda.{% else %}Você ainda não criou a sua ficha. Cada jogador pode ter apenas uma.{% endif %}</p>
 </section>
 {% endif %}
 {% endblock %}
