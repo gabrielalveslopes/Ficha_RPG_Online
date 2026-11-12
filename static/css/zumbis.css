@@ -193,6 +193,7 @@ input[type="file"].campo { padding: .6rem; font-family: var(--corpo); }
 .lista-mochila li { display: grid; grid-template-columns: 2.2rem 1fr 4.2rem auto; gap: .5rem; align-items: center; }
 .lista-mochila .num { align-self: stretch; display: flex; align-items: center; justify-content: center; }
 .lista-slots li { grid-template-columns: 2.2rem 1fr; }
+.caixa-mochila { border: 2px dashed var(--oliva-esc); padding: .4rem .6rem; font-family: var(--maquina); margin-bottom: .8rem; }
 .form-inline { margin: 0; display: inline-flex; }
 .botao-mini { min-height: 44px; padding: .3rem .7rem; font-size: .95rem; }
 .etiqueta { display: inline-block; font-family: var(--maquina); font-size: .78rem; font-weight: 400; color: var(--tinta); border: 2px dashed var(--oliva-esc); padding: 0 .4rem; vertical-align: middle; }

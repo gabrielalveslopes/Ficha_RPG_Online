@@ -48,3 +48,35 @@
     leitor.readAsDataURL(arquivo);
   });
 })();
+
+// Contador de slots da mochila (comum = 10, militar = 15). O servidor também valida.
+(function () {
+  var seletor = document.getElementById("id_tipo_mochila");
+  var resumo = document.getElementById("mochila-resumo");
+  if (!seletor || !resumo) return;
+  var capacidades = {};
+  (seletor.getAttribute("data-capacidades") || "").split(",").forEach(function (par) {
+    var p = par.split(":");
+    if (p.length === 2) capacidades[p[0]] = parseInt(p[1], 10);
+  });
+
+  function atualizar() {
+    var capacidade = capacidades[seletor.value] || 10;
+    var ocupados = 0;
+    document.querySelectorAll("[data-mochila-item]").forEach(function (campo) {
+      var linha = campo.closest("li");
+      var remover = linha && linha.querySelector("input[type=checkbox]");
+      if (campo.value.trim() && !(remover && remover.checked)) ocupados += 1;
+    });
+    var texto = "Mochila: " + ocupados + " de " + capacidade + " slots usados";
+    if (ocupados > capacidade) texto += " (acima do limite: remova itens ou escolha a mochila militar)";
+    resumo.textContent = texto;
+  }
+
+  seletor.addEventListener("change", atualizar);
+  document.querySelectorAll("[data-mochila-item], .mochila-form input[type=checkbox]").forEach(function (el) {
+    el.addEventListener("input", atualizar);
+    el.addEventListener("change", atualizar);
+  });
+  atualizar();
+})();
