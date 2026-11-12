@@ -107,9 +107,10 @@
   </section>
 
   <section class="painel" aria-labelledby="s-moc">
-    <h2 id="s-moc" class="faixa-secao">Mochila (até 15 itens)</h2>
+    <h2 id="s-moc" class="faixa-secao">Mochila</h2>
     <div class="painel-corpo">
-      <p class="texto-suave">Para apagar um item já salvo, marque “Remover” na linha dele.</p>
+      <p class="texto-suave">O tipo de mochila é escolhido no quadro “Slots”. A mochila comum comporta 10 itens (linhas 1 a 10); a militar, 15 (linhas 1 a 15). Para apagar um item já salvo, marque “Remover”.</p>
+      <p id="mochila-resumo" class="pontos" aria-live="polite">Mochila: —</p>
       {{ mochila.management_form }}
       {% for e in mochila.non_form_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
       <ol class="mochila-form">
@@ -145,6 +146,7 @@
     <section class="painel" aria-labelledby="s-slots">
       <h2 id="s-slots" class="faixa-secao">Slots</h2>
       <div class="painel-corpo">
+        {% include "fichas/_campo.html" with campo=form.tipo_mochila %}
         {% for c in form.slots %}{% include "fichas/_campo.html" with campo=c %}{% endfor %}
       </div>
     </section>

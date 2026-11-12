@@ -113,7 +113,7 @@
 </div>
 
 <section class="painel" id="mochila" aria-labelledby="t-moc">
-  <h2 id="t-moc" class="faixa-secao">Mochila ({{ mochila|length }} de 15)</h2>
+  <h2 id="t-moc" class="faixa-secao">Mochila ({{ mochila|length }} de {{ ficha.capacidade_mochila }})</h2>
   <div class="painel-corpo">
     {% if mochila %}
     <ol class="lista-mochila">
@@ -137,11 +137,14 @@
   </section>
   <section class="painel" aria-labelledby="t-slots">
     <h2 id="t-slots" class="faixa-secao">Slots</h2>
-    <ol class="painel-corpo lista-mochila lista-slots">
-      {% for n, texto in ficha.slots_lista %}
-      <li><span class="num">{{ n }}</span><span class="caixa">{{ texto|default:"—" }}</span></li>
-      {% endfor %}
-    </ol>
+    <div class="painel-corpo">
+      <p class="caixa-mochila"><strong>Mochila:</strong> {{ ficha.get_tipo_mochila_display }}</p>
+      <ol class="lista-mochila lista-slots">
+        {% for n, texto in ficha.slots_lista %}
+        <li><span class="num">{{ n }}</span><span class="caixa">{{ texto|default:"—" }}</span></li>
+        {% endfor %}
+      </ol>
+    </div>
   </section>
 </div>
 
