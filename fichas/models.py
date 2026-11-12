@@ -119,6 +119,15 @@ def _atributo(rotulo):
     )
 
 
+class TipoMochila(models.TextChoices):
+    COMUM = "comum", "Mochila comum (10 slots)"
+    MILITAR = "militar", "Mochila militar (15 slots)"
+
+
+CAPACIDADE_MOCHILA = {TipoMochila.COMUM: 10, TipoMochila.MILITAR: 15}
+MOCHILA_MAXIMO = max(CAPACIDADE_MOCHILA.values())
+
+
 class FichaQuerySet(models.QuerySet):
     def visiveis_para(self, user):
         """REGRA CENTRAL DE ACESSO: mestre vê todas; jogador vê só as próprias."""
@@ -190,6 +199,9 @@ class Ficha(models.Model):
     slot_2 = models.CharField("Slot 2", max_length=120, blank=True)
     slot_3 = models.CharField("Slot 3", max_length=120, blank=True)
     slot_4 = models.CharField("Slot 4", max_length=120, blank=True)
+    tipo_mochila = models.CharField(
+        "mochila", max_length=10, choices=TipoMochila.choices, default=TipoMochila.COMUM
+    )
 
     criada_em = models.DateTimeField(auto_now_add=True)
     atualizada_em = models.DateTimeField(auto_now=True)
@@ -218,6 +230,10 @@ class Ficha(models.Model):
     @property
     def atributos_lista(self):
         return [(sigla, nome, getattr(self, campo)) for campo, nome, sigla in ATRIBUTOS]
+
+    @property
+    def capacidade_mochila(self):
+        return CAPACIDADE_MOCHILA.get(self.tipo_mochila, CAPACIDADE_MOCHILA[TipoMochila.COMUM])
 
     @property
     def recursos_lista(self):
