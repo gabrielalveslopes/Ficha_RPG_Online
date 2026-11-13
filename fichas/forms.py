@@ -22,6 +22,9 @@ from .models import (
     Origem,
     Proficiencia,
     Trunfo,
+    TrunfoFicha,
+    ItemModelo,
+    TRUNFOS_MAXIMO,
     eh_mestre,
 )
 
@@ -90,7 +93,7 @@ class FichaJogadorForm(forms.ModelForm):
         model = Ficha
         fields = [
             "nome_personagem", "origem", "foto", *ATRIBUTO_CAMPOS,
-            "trunfos", "qualidades", "defeitos", *RECURSO_CAMPOS, *SLOT_CAMPOS, "tipo_mochila",
+            "qualidades", "defeitos", *RECURSO_CAMPOS, *SLOT_CAMPOS, "tipo_mochila",
         ]
         widgets = {
             **{campo: _numero(1, 10) for campo in ATRIBUTO_CAMPOS},
@@ -99,7 +102,6 @@ class FichaJogadorForm(forms.ModelForm):
                 "data-capacidades": ",".join(f"{k}:{v}" for k, v in CAPACIDADE_MOCHILA.items())
             }),
             "foto": forms.FileInput(attrs={"accept": "image/*", "data-previa": "previa-foto"}),
-            "trunfos": forms.CheckboxSelectMultiple,
             "qualidades": forms.Textarea(attrs={"rows": 6}),
             "defeitos": forms.Textarea(attrs={"rows": 6}),
         }
@@ -113,10 +115,6 @@ class FichaJogadorForm(forms.ModelForm):
             Q(ativo=True) | Q(pk=self.instance.origem_id)
         )
         self.fields["origem"].empty_label = "— escolha uma origem —"
-        trunfos_atuais = self.instance.trunfos.all() if self.instance.pk else Trunfo.objects.none()
-        self.fields["trunfos"].queryset = Trunfo.objects.filter(
-            Q(ativo=True) | Q(pk__in=trunfos_atuais.values("pk"))
-        )
         for campo in ATRIBUTO_CAMPOS:
             self.fields[campo].widget.attrs["data-atributo"] = campo
 
@@ -231,6 +229,37 @@ class ItemMochilaForm(forms.ModelForm):
         estilizar(self)
 
 
+class TrunfoFichaForm(forms.ModelForm):
+    class Meta:
+        model = TrunfoFicha
+        fields = ["nome", "descricao"]
+        widgets = {
+            "nome": forms.TextInput(attrs={"list": "trunfos-sugeridos", "autocomplete": "off"}),
+            "descricao": forms.Textarea(attrs={"rows": 2}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        estilizar(self)
+
+
+class BaseTrunfoFormSet(forms.BaseInlineFormSet):
+    def clean(self):
+        super().clean()
+        preenchidos = sum(
+            1 for f in self.forms
+            if getattr(f, "cleaned_data", None)
+            and f.cleaned_data.get("nome") and not f.cleaned_data.get("DELETE")
+        )
+        if preenchidos > TRUNFOS_MAXIMO:
+            raise forms.ValidationError(f"Cada personagem pode ter no máximo {TRUNFOS_MAXIMO} trunfos.")
+
+
+TrunfoFormSet = forms.inlineformset_factory(
+    Ficha, TrunfoFicha, form=TrunfoFichaForm, formset=BaseTrunfoFormSet,
+    extra=TRUNFOS_MAXIMO, max_num=TRUNFOS_MAXIMO, validate_max=True, can_delete=True,
+)
+
 ArmaFormSet = forms.inlineformset_factory(
     Ficha, Arma, form=ArmaForm, extra=4, can_delete=True
 )
@@ -281,3 +310,91 @@ class ItemForm(forms.ModelForm):
             lambda f: f"{f.nome_personagem} (jogador: {f.jogador.get_username()})"
         )
         estilizar(self)
+
+
+# ------------------------------------------- Tabela de itens e envio em lote ----
+class ItemModeloForm(forms.ModelForm):
+    class Meta:
+        model = ItemModelo
+        fields = ["nome", "categoria", "descricao"]
+        widgets = {"descricao": forms.Textarea(attrs={"rows": 2})}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        estilizar(self)
+
+
+ItemModeloFormSet = forms.modelformset_factory(
+    ItemModelo, form=ItemModeloForm, extra=5, can_delete=True
+)
+
+
+class EnvioItensForm(forms.Form):
+    """O mestre escolhe fichas e itens (da tabela e/ou avulsos) e envia tudo de uma vez."""
+
+    AVULSOS = 3
+
+    fichas = forms.ModelMultipleChoiceField(
+        queryset=Ficha.objects.none(),
+        widget=forms.CheckboxSelectMultiple,
+        label="Enviar para (uma ou mais fichas)",
+        error_messages={"required": "Escolha pelo menos uma ficha."},
+    )
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.itens = []
+        self.fields["fichas"].queryset = Ficha.objects.select_related("jogador").order_by("nome_personagem")
+        self.fields["fichas"].label_from_instance = (
+            lambda f: f"{f.nome_personagem} (jogador: {f.jogador.get_username()})"
+        )
+        self.modelos = list(ItemModelo.objects.all())
+        for m in self.modelos:
+            self.fields[f"modelo_{m.pk}"] = forms.IntegerField(
+                label=m.nome, required=False, min_value=0, max_value=999,
+                widget=forms.NumberInput(attrs={"min": 0, "max": 999, "inputmode": "numeric"}),
+            )
+        for n in range(1, self.AVULSOS + 1):
+            self.fields[f"avulso_nome_{n}"] = forms.CharField(
+                label=f"Item avulso {n}", required=False, max_length=120
+            )
+            self.fields[f"avulso_qtd_{n}"] = forms.IntegerField(
+                label=f"Quantidade do item avulso {n}", required=False, min_value=1, max_value=999,
+                widget=forms.NumberInput(attrs={"min": 1, "max": 999, "inputmode": "numeric"}),
+            )
+        estilizar(self)
+
+    def campos_modelos(self):
+        return [(m, self[f"modelo_{m.pk}"]) for m in self.modelos]
+
+    def campos_avulsos(self):
+        return [(self[f"avulso_nome_{n}"], self[f"avulso_qtd_{n}"]) for n in range(1, self.AVULSOS + 1)]
+
+    def clean(self):
+        dados = super().clean()
+        itens = []
+        for m in self.modelos:
+            quantidade = dados.get(f"modelo_{m.pk}")
+            if quantidade:
+                itens.append((m.nome, m.descricao, quantidade))
+        for n in range(1, self.AVULSOS + 1):
+            nome = (dados.get(f"avulso_nome_{n}") or "").strip()
+            if nome:
+                itens.append((nome, "", dados.get(f"avulso_qtd_{n}") or 1))
+        if not itens and not self.errors:
+            raise forms.ValidationError(
+                "Escolha ao menos um item da tabela (quantidade maior que 0) ou digite um item avulso."
+            )
+        self.itens = itens
+        return dados
+
+    def enviar(self, usuario):
+        """Cria os itens para cada ficha escolhida. Devolve (total de itens criados, nº de fichas)."""
+        fichas = list(self.cleaned_data["fichas"])
+        novos = [
+            ItemEncontrado(ficha=ficha, nome=nome, descricao=descricao, quantidade=quantidade, criado_por=usuario)
+            for ficha in fichas
+            for nome, descricao, quantidade in self.itens
+        ]
+        ItemEncontrado.objects.bulk_create(novos)
+        return len(novos), len(fichas)
