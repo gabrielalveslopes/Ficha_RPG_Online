@@ -3,7 +3,8 @@ from django.contrib.auth import get_user_model
 from django.contrib.auth.admin import UserAdmin
 
 from .models import (
-    Arma, Ficha, FichaProficiencia, ItemEncontrado, ItemMochila, Origem, Perfil, Proficiencia, Trunfo,
+    Arma, Ficha, FichaProficiencia, ItemEncontrado, ItemMochila, ItemModelo, Origem, Perfil, Proficiencia,
+    Trunfo, TrunfoFicha,
 )
 
 
@@ -26,6 +27,17 @@ class ArmaInline(admin.TabularInline):
     extra = 0
 
 
+class TrunfoFichaInline(admin.TabularInline):
+    model = TrunfoFicha
+    extra = 0
+
+
+@admin.register(ItemModelo)
+class ItemModeloAdmin(admin.ModelAdmin):
+    list_display = ("nome", "categoria")
+    search_fields = ("nome", "categoria")
+
+
 class MochilaInline(admin.TabularInline):
     model = ItemMochila
     extra = 0
@@ -35,7 +47,7 @@ class MochilaInline(admin.TabularInline):
 class FichaAdmin(admin.ModelAdmin):
     list_display = ("nome_personagem", "jogador", "origem")
     search_fields = ("nome_personagem", "jogador__username")
-    inlines = [FichaProficienciaInline, ArmaInline, MochilaInline]
+    inlines = [FichaProficienciaInline, ArmaInline, MochilaInline, TrunfoFichaInline]
 
 
 @admin.register(ItemEncontrado)
