@@ -91,9 +91,11 @@ class Proficiencia(ItemCatalogo):
 
 
 class Trunfo(ItemCatalogo):
+    """Trunfos SUGERIDOS pelo mestre (aparecem como sugestão no campo de nome do jogador)."""
+
     class Meta(ItemCatalogo.Meta):
-        verbose_name = "trunfo"
-        verbose_name_plural = "trunfos"
+        verbose_name = "trunfo sugerido"
+        verbose_name_plural = "trunfos sugeridos"
 
 
 # ----------------------------------------------------------------- Ficha ----
@@ -108,6 +110,7 @@ ATRIBUTOS = [
     ("sangue_frio", "Sangue Frio", "SF"),
 ]
 ATRIBUTO_CAMPOS = [campo for campo, _, _ in ATRIBUTOS]
+TRUNFOS_MAXIMO = 3  # a ficha de papel tem 3 linhas de trunfo
 PONTOS_SUGERIDOS = 21  # orientação do livro; não é validação rígida
 RECURSO_CAMPOS = [f"recurso_{l}" for l in "mwetdfr"]  # M W E T D F R da ficha
 SLOT_CAMPOS = [f"slot_{n}" for n in range(1, 5)]
@@ -183,7 +186,6 @@ class Ficha(models.Model):
     mov = models.PositiveSmallIntegerField("MOV", null=True, blank=True)
     fadiga = models.PositiveSmallIntegerField("Fadiga", null=True, blank=True)
 
-    trunfos = models.ManyToManyField(Trunfo, blank=True, related_name="fichas", verbose_name="trunfos")
     qualidades = models.TextField("qualidades", blank=True)
     defeitos = models.TextField("defeitos", blank=True)
 
@@ -279,6 +281,22 @@ class FichaProficiencia(models.Model):
         return f"{self.proficiencia} ({self.bonus:+d})"
 
 
+class TrunfoFicha(models.Model):
+    """Trunfo do personagem: o próprio jogador escreve (no máximo 3 por ficha)."""
+
+    ficha = models.ForeignKey(Ficha, on_delete=models.CASCADE, related_name="trunfos_escolhidos")
+    nome = models.CharField("trunfo", max_length=100)
+    descricao = models.TextField("descrição", blank=True)
+
+    class Meta:
+        ordering = ["id"]
+        verbose_name = "trunfo da ficha"
+        verbose_name_plural = "trunfos da ficha"
+
+    def __str__(self):
+        return self.nome
+
+
 class Arma(models.Model):
     ficha = models.ForeignKey(Ficha, on_delete=models.CASCADE, related_name="armas")
     nome = models.CharField("arma", max_length=100)
@@ -350,3 +368,20 @@ class ItemEncontrado(models.Model):
 
     def __str__(self):
         return f"{self.nome} → {self.ficha}"
+
+
+# ----------------------------------------------- Tabela de itens do mestre ----
+class ItemModelo(models.Model):
+    """Item predefinido pelo mestre (a "planilha"), pronto para ser enviado a vários jogadores."""
+
+    nome = models.CharField("nome do item", max_length=120)
+    categoria = models.CharField("categoria", max_length=60, blank=True, help_text="Ex.: Comida, Remédios, Munição.")
+    descricao = models.TextField("descrição", blank=True)
+
+    class Meta:
+        ordering = ["categoria", "nome"]
+        verbose_name = "item da tabela"
+        verbose_name_plural = "tabela de itens"
+
+    def __str__(self):
+        return self.nome
