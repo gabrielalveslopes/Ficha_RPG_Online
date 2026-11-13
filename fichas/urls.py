@@ -13,6 +13,8 @@ urlpatterns = [
     # Itens encontrados: somente o mestre usa estas páginas.
     path("itens/", views.item_lista, name="item_lista"),
     path("itens/novo/", views.item_criar, name="item_criar"),
+    path("itens/enviar/", views.item_enviar, name="item_enviar"),
+    path("itens/tabela/", views.item_modelos, name="item_modelos"),
     path("itens/<int:pk>/editar/", views.item_editar, name="item_editar"),
     path("itens/<int:pk>/excluir/", views.item_excluir, name="item_excluir"),
     # Pegar / deixar: botões na ficha (mestre ou dono da ficha), só POST.

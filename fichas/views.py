@@ -19,10 +19,11 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    ArmaFormSet, FichaJogadorForm, FichaMestreForm, ItemForm, MochilaFormSet,
+    ArmaFormSet, EnvioItensForm, FichaJogadorForm, FichaMestreForm, ItemForm, ItemModeloFormSet,
+    MochilaFormSet, TrunfoFormSet,
 )
 from .models import (
-    CAPACIDADE_MOCHILA, PONTOS_SUGERIDOS, Ficha, ItemEncontrado, ItemMochila, TipoMochila, eh_mestre,
+    CAPACIDADE_MOCHILA, PONTOS_SUGERIDOS, Ficha, ItemEncontrado, ItemMochila, TipoMochila, Trunfo, eh_mestre,
 )
 
 
@@ -82,7 +83,7 @@ def ficha_detalhe(request, pk):
         "armas": ficha.armas.all(),
         "mochila": ficha.mochila.all(),
         "proficiencias": ficha.proficiencias_escolhidas.select_related("proficiencia"),
-        "trunfos": ficha.trunfos.all(),
+        "trunfos": ficha.trunfos_escolhidos.all(),
         "itens": ficha.itens.all(),  # só chega aqui quem pode ver esta ficha
     }
     return render(request, "fichas/ficha_detalhe.html", contexto)
@@ -106,10 +107,11 @@ def _salvar_ficha(request, ficha, titulo, novo):
         form = Formulario(request.POST, request.FILES, instance=ficha)
         armas = ArmaFormSet(request.POST, instance=ficha, prefix="arma")
         mochila = MochilaFormSet(request.POST, instance=ficha, prefix="mochila")
+        trunfos = TrunfoFormSet(request.POST, instance=ficha, prefix="trunfo")
         mochila.capacidade = CAPACIDADE_MOCHILA.get(
             request.POST.get("tipo_mochila"), CAPACIDADE_MOCHILA[TipoMochila.COMUM]
         )
-        validos = [form.is_valid(), armas.is_valid(), mochila.is_valid()]
+        validos = [form.is_valid(), armas.is_valid(), mochila.is_valid(), trunfos.is_valid()]
         if all(validos):
             with transaction.atomic():
                 salva = form.save(commit=False)
@@ -118,7 +120,7 @@ def _salvar_ficha(request, ficha, titulo, novo):
                 salva.save()
                 form.save_m2m()
                 form.salvar_proficiencias(salva)
-                for conjunto in (armas, mochila):
+                for conjunto in (armas, mochila, trunfos):
                     conjunto.instance = salva
                     conjunto.save()
             form.descartar_foto_antiga(salva)
@@ -135,10 +137,12 @@ def _salvar_ficha(request, ficha, titulo, novo):
         form = Formulario(instance=ficha)
         armas = ArmaFormSet(instance=ficha, prefix="arma")
         mochila = MochilaFormSet(instance=ficha, prefix="mochila")
+        trunfos = TrunfoFormSet(instance=ficha, prefix="trunfo")
     return render(
         request,
         "fichas/ficha_form.html",
-        {"form": form, "armas": armas, "mochila": mochila,
+        {"form": form, "armas": armas, "mochila": mochila, "trunfos": trunfos,
+         "trunfos_sugeridos": Trunfo.objects.filter(ativo=True),
          "titulo": titulo, "novo": novo, "ficha": ficha},
     )
 
@@ -177,6 +181,43 @@ def item_lista(request):
         "ficha", "ficha__jogador"
     )
     return render(request, "fichas/item_lista.html", {"itens": itens})
+
+
+@mestre_required
+def item_enviar(request):
+    """Envia vários itens (da tabela e/ou avulsos) para uma ou mais fichas de uma só vez."""
+    if request.method == "POST":
+        form = EnvioItensForm(request.POST)
+        if form.is_valid():
+            with transaction.atomic():
+                total, n_fichas = form.enviar(request.user)
+            messages.success(
+                request, f"{total} item(ns) enviado(s) para {n_fichas} ficha(s), em uma só operação."
+            )
+            return redirect("item_lista")
+        messages.error(request, "Não foi possível enviar. Corrija os campos indicados abaixo.")
+    else:
+        inicial = {}
+        ficha_id = request.GET.get("ficha", "")
+        if ficha_id.isdigit():
+            inicial["fichas"] = [int(ficha_id)]
+        form = EnvioItensForm(initial=inicial)
+    return render(request, "fichas/item_enviar.html", {"form": form})
+
+
+@mestre_required
+def item_modelos(request):
+    """Tabela (planilha) de itens predefinidos do mestre: edita todas as linhas de uma vez."""
+    if request.method == "POST":
+        formset = ItemModeloFormSet(request.POST, prefix="modelo")
+        if formset.is_valid():
+            formset.save()
+            messages.success(request, "Tabela de itens salva.")
+            return redirect("item_modelos")
+        messages.error(request, "Não foi possível salvar a tabela. Corrija as linhas indicadas.")
+    else:
+        formset = ItemModeloFormSet(prefix="modelo")
+    return render(request, "fichas/item_modelos.html", {"formset": formset})
 
 
 @mestre_required
