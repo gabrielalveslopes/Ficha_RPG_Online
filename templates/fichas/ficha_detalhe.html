@@ -185,7 +185,7 @@
       {% endfor %}
     </ul>
     {% else %}<p class="texto-suave">Nenhum item encontrado até agora.</p>{% endif %}
-    {% if eh_mestre %}<a class="botao botao-primario" href="{% url 'item_criar' %}?ficha={{ ficha.pk }}">Registrar item para {{ ficha.nome_personagem }}</a>{% endif %}
+    {% if eh_mestre %}<a class="botao botao-primario" href="{% url 'item_enviar' %}?ficha={{ ficha.pk }}">Enviar itens para {{ ficha.nome_personagem }}</a>{% endif %}
   </div>
 </section>
 {% endblock %}
