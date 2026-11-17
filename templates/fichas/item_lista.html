@@ -3,7 +3,11 @@
 {% block conteudo %}
 <div class="cabecalho-pagina">
   <h1 class="titulo-pagina">Itens encontrados</h1>
-  <a class="botao botao-primario" href="{% url 'item_criar' %}">Registrar item</a>
+  <div class="acoes acoes-topo">
+    <a class="botao botao-primario" href="{% url 'item_enviar' %}">Enviar itens</a>
+    <a class="botao botao-secundario" href="{% url 'item_modelos' %}">Tabela de itens</a>
+    <a class="botao botao-secundario" href="{% url 'item_criar' %}">Registrar um item</a>
+  </div>
 </div>
 {% if itens %}
 <ul class="lista-itens">

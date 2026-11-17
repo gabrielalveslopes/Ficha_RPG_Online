@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block titulo %}Enviar itens{% endblock %}
+{% block conteudo %}
+{% include "fichas/_faixa.html" with subtitulo="Itens encontrados" %}
+<h1 class="titulo-pagina">Enviar itens</h1>
+<p class="texto-suave">Escolha as fichas e os itens. Tudo é enviado de uma vez para cada ficha marcada, e só o mestre e o dono de cada ficha verão os itens.</p>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {% for e in form.non_field_errors %}<p class="erro-campo" role="alert"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+
+  <section class="painel" aria-labelledby="e-fichas">
+    <h2 id="e-fichas" class="faixa-secao">1. Para quem</h2>
+    <div class="painel-corpo">
+      <div class="grupo{% if form.fichas.errors %} grupo-erro{% endif %}">
+        <ul class="lista-marcar">
+          {% for opcao in form.fichas %}
+          <li><label class="marcar" for="{{ opcao.id_for_label }}">{{ opcao.tag }} {{ opcao.choice_label }}</label></li>
+          {% empty %}<li class="texto-suave">Nenhuma ficha criada ainda.</li>
+          {% endfor %}
+        </ul>
+        {% for e in form.fichas.errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <section class="painel" aria-labelledby="e-tabela">
+    <h2 id="e-tabela" class="faixa-secao">2. Itens da tabela <a class="link-claro" href="{% url 'item_modelos' %}">Editar tabela</a></h2>
+    <div class="painel-corpo">
+      {% with campos=form.campos_modelos %}
+      {% if campos %}
+      <p class="texto-suave">Digite a quantidade de cada item que quer enviar. Deixe em 0 (ou em branco) os que não vão.</p>
+      <div class="prof-form">
+        {% for modelo, c in campos %}
+        <div class="prof-item{% if c.errors %} grupo-erro{% endif %}">
+          <label for="{{ c.id_for_label }}">{{ modelo.nome }}{% if modelo.categoria %} <span class="pequeno texto-suave">({{ modelo.categoria }})</span>{% endif %}</label>
+          {{ c }}
+          {% for e in c.errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="texto-suave">A tabela está vazia. <a href="{% url 'item_modelos' %}">Cadastre itens predefinidos</a> para enviá-los rapidamente, ou use os itens avulsos abaixo.</p>
+      {% endif %}
+      {% endwith %}
+    </div>
+  </section>
+
+  <section class="painel" aria-labelledby="e-avulsos">
+    <h2 id="e-avulsos" class="faixa-secao">3. Itens avulsos (opcional)</h2>
+    <div class="painel-corpo">
+      {% for nome, qtd in form.campos_avulsos %}
+      <div class="avulso">
+        {% include "fichas/_campo.html" with campo=nome %}
+        {% include "fichas/_campo.html" with campo=qtd %}
+      </div>
+      {% endfor %}
+      <p class="texto-suave pequeno">Em branco, a quantidade vale 1.</p>
+    </div>
+  </section>
+
+  <div class="barra-acoes">
+    <button type="submit" class="botao botao-primario">Enviar itens</button>
+    <a class="botao botao-secundario" href="{% url 'item_lista' %}">Cancelar</a>
+  </div>
+</form>
+{% endblock %}
