@@ -8,13 +8,15 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from .models import Ficha, ItemEncontrado, ItemMochila, Papel, Proficiencia, eh_mestre
+from .models import (
+    Ficha, ItemEncontrado, ItemMochila, ItemModelo, Papel, Proficiencia, eh_mestre,
+)
 
 User = get_user_model()
 SENHA = "senha-de-teste-123"
 FORMSETS_VAZIOS = {
     f"{prefixo}-{campo}": valor
-    for prefixo in ("arma", "mochila")
+    for prefixo in ("arma", "mochila", "trunfo")
     for campo, valor in (("TOTAL_FORMS", "0"), ("INITIAL_FORMS", "0"),
                          ("MIN_NUM_FORMS", "0"), ("MAX_NUM_FORMS", "1000"))
 }
@@ -324,3 +326,79 @@ class PegarEDeixarTest(TestCase):
         self.client.login(username="mestre", password=SENHA)
         self.client.post(reverse("item_pegar", args=[self.item.pk]))
         self.assertEqual(self.ficha.mochila.count(), 1)
+
+
+class TrunfosEEnvioTest(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.mestre = User.objects.create_user("mestre", password=SENHA)
+        cls.mestre.perfil.papel = Papel.MESTRE
+        cls.mestre.perfil.save()
+        cls.ana = User.objects.create_user("ana", password=SENHA)
+        cls.bruno = User.objects.create_user("bruno", password=SENHA)
+        cls.ficha_ana = Ficha.objects.create(jogador=cls.ana, nome_personagem="Ana")
+        cls.ficha_bruno = Ficha.objects.create(jogador=cls.bruno, nome_personagem="Bruno")
+
+    def _dados_trunfos(self, nomes):
+        d = dados_ficha(nome_personagem="Ana")
+        d.update({"trunfo-TOTAL_FORMS": str(len(nomes)), "trunfo-INITIAL_FORMS": "0"})
+        for n, nome in enumerate(nomes):
+            d[f"trunfo-{n}-nome"] = nome
+        return d
+
+    # --- trunfos
+    def test_jogador_adiciona_ate_tres_trunfos(self):
+        self.client.login(username="ana", password=SENHA)
+        url = reverse("ficha_editar", args=[self.ficha_ana.pk])
+        r = self.client.post(url, self._dados_trunfos(["A", "B", "C"]))
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(self.ficha_ana.trunfos_escolhidos.count(), 3)
+
+    def test_quarto_trunfo_e_recusado(self):
+        self.client.login(username="ana", password=SENHA)
+        url = reverse("ficha_editar", args=[self.ficha_ana.pk])
+        r = self.client.post(url, self._dados_trunfos(["A", "B", "C", "D"]))
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(self.ficha_ana.trunfos_escolhidos.count(), 0)
+
+    # --- envio em lote
+    def test_jogador_nao_acessa_envio_nem_tabela(self):
+        self.client.login(username="ana", password=SENHA)
+        self.assertEqual(self.client.get(reverse("item_enviar")).status_code, 403)
+        self.assertEqual(self.client.post(reverse("item_enviar"), {}).status_code, 403)
+        self.assertEqual(self.client.get(reverse("item_modelos")).status_code, 403)
+
+    def test_mestre_envia_varios_itens_para_varias_fichas(self):
+        agua = ItemModelo.objects.create(nome="Água", categoria="Comida")
+        faca = ItemModelo.objects.create(nome="Faca")
+        self.client.login(username="mestre", password=SENHA)
+        r = self.client.post(reverse("item_enviar"), {
+            "fichas": [self.ficha_ana.pk, self.ficha_bruno.pk],
+            f"modelo_{agua.pk}": 2, f"modelo_{faca.pk}": 0,
+            "avulso_nome_1": "Rádio quebrado", "avulso_qtd_1": "",
+        })
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(ItemEncontrado.objects.count(), 4)  # 2 itens x 2 fichas
+        self.assertEqual(ItemEncontrado.objects.get(ficha=self.ficha_ana, nome="Água").quantidade, 2)
+        self.assertEqual(ItemEncontrado.objects.get(ficha=self.ficha_bruno, nome="Rádio quebrado").quantidade, 1)
+        self.assertFalse(ItemEncontrado.objects.filter(nome="Faca").exists())
+
+    def test_envio_exige_ficha_e_item(self):
+        agua = ItemModelo.objects.create(nome="Água")
+        self.client.login(username="mestre", password=SENHA)
+        r = self.client.post(reverse("item_enviar"), {f"modelo_{agua.pk}": 1})
+        self.assertEqual(r.status_code, 200)  # sem ficha escolhida
+        r = self.client.post(reverse("item_enviar"), {"fichas": [self.ficha_ana.pk]})
+        self.assertEqual(r.status_code, 200)  # sem nenhum item
+        self.assertEqual(ItemEncontrado.objects.count(), 0)
+
+    def test_mestre_salva_tabela_de_itens(self):
+        self.client.login(username="mestre", password=SENHA)
+        r = self.client.post(reverse("item_modelos"), {
+            "modelo-TOTAL_FORMS": "2", "modelo-INITIAL_FORMS": "0",
+            "modelo-MIN_NUM_FORMS": "0", "modelo-MAX_NUM_FORMS": "1000",
+            "modelo-0-nome": "Bandagem", "modelo-0-categoria": "Remédios",
+            "modelo-1-nome": "", "modelo-1-categoria": "",
+        })
+        self.assertEqual(r.status_code, 302)
+        self.assertEqual(ItemModelo.objects.get().nome, "Bandagem")
