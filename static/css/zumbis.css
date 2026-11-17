@@ -267,3 +267,10 @@ input[type="file"].campo { padding: .6rem; font-family: var(--corpo); }
   .titulo-pagina { font-size: 1.9rem; }
 }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; transition: none !important; animation: none !important; } }
+
+/* Envio em lote e tabela de itens */
+.link-claro { color: var(--creme); font-size: .85rem; font-weight: 700; text-transform: none; letter-spacing: 0; }
+.link-claro:hover { color: #fff; }
+.avulso { display: grid; gap: 0 .75rem; grid-template-columns: 1fr 7rem; align-items: end; }
+.linha-modelo { display: grid; gap: 0 .75rem; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .linha-modelo { grid-template-columns: 2fr 1fr; } }
