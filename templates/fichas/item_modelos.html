@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block titulo %}Tabela de itens{% endblock %}
+{% block conteudo %}
+{% include "fichas/_faixa.html" with subtitulo="Tabela de itens" %}
+<div class="cabecalho-pagina">
+  <h1 class="titulo-pagina">Tabela de itens</h1>
+  <a class="botao botao-secundario" href="{% url 'item_enviar' %}">Ir para o envio</a>
+</div>
+<p class="texto-suave">Cadastre aqui os itens que você usa com frequência. Na tela “Enviar itens” eles aparecem prontos, só falta digitar a quantidade. Preencha as linhas em branco para adicionar; marque “Remover” para apagar uma linha existente.</p>
+
+<form method="post" novalidate>
+  {% csrf_token %}
+  {{ formset.management_form }}
+  {% for e in formset.non_form_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+  {% for f in formset %}
+  <fieldset class="linha-arma">
+    <legend class="so-leitor">Linha {{ forloop.counter }}</legend>
+    {% for h in f.hidden_fields %}{{ h }}{% endfor %}
+    {% for e in f.non_field_errors %}<p class="erro-campo"><span aria-hidden="true">✖</span> <strong>Erro:</strong> {{ e }}</p>{% endfor %}
+    <div class="linha-modelo">
+      {% include "fichas/_campo.html" with campo=f.nome %}
+      {% include "fichas/_campo.html" with campo=f.categoria %}
+    </div>
+    {% include "fichas/_campo.html" with campo=f.descricao %}
+    {% if f.instance.pk %}<label class="marcar"><input type="checkbox" name="{{ f.DELETE.html_name }}" id="{{ f.DELETE.id_for_label }}"{% if f.DELETE.value %} checked{% endif %}> Remover esta linha</label>{% endif %}
+  </fieldset>
+  {% endfor %}
+  <div class="barra-acoes">
+    <button type="submit" class="botao botao-primario">Salvar tabela</button>
+    <a class="botao botao-secundario" href="{% url 'item_lista' %}">Voltar</a>
+  </div>
+</form>
+{% endblock %}
