@@ -65,6 +65,15 @@ Na ficha, cada item encontrado tem os botões **Pegar** e **Deixar**; cada item 
 - **Deixar** (item da mochila): sai da mochila e volta para os itens encontrados, marcado como “Deixado”.
 Mestre e dono da ficha podem usar os botões; qualquer outra pessoa recebe 404. Os botões só aceitam POST (com CSRF).
 
+## 2d. Trunfos (máximo 3)
+
+O próprio jogador escreve os trunfos na ficha (nome e descrição), no máximo **3** por personagem, igual à ficha de papel. O servidor recusa o 4º. Os trunfos cadastrados pelo mestre em `/admin/` (“Trunfos sugeridos”) aparecem como sugestão ao digitar o nome.
+
+## 2e. Enviar vários itens e tabela de itens
+
+- **Tabela de itens** (`Itens encontrados → Tabela de itens`): uma “planilha” em que o mestre cadastra itens predefinidos (nome, categoria, descrição) e edita todas as linhas de uma vez.
+- **Enviar itens** (`Itens encontrados → Enviar itens`, ou o botão na ficha): marque uma ou mais fichas, digite a quantidade dos itens da tabela que quer enviar e, se precisar, até 3 itens avulsos. Tudo é criado de uma só vez para cada ficha marcada. Os itens continuam privados (só o mestre e o dono da ficha).
+
 ## 3. Configurar origens, proficiências e trunfos
 
 Em **Configurações** (`/admin/`) edite *Origens*, *Proficiências* e *Trunfos*. Desmarcar
