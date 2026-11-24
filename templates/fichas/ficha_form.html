@@ -43,9 +43,10 @@
   <section class="painel" aria-labelledby="s-est">
     <h2 id="s-est" class="faixa-secao">Estado (mestre)</h2>
     <div class="painel-corpo">
-      <p class="texto-suave">Valores atuais de SF e ANT em branco começam cheios. Máximos em branco usam o padrão (SF × 3 e RES × 10).</p>
+      <p class="texto-suave">Valores atuais de PV, SF e ANT em branco começam cheios. Máximos em branco usam o padrão: PV = (COR + RES) × 2, SF × 3 e RES × 10.</p>
       <div class="grade-vitais">
         {% include "fichas/_campo.html" with campo=form.pv %}
+        {% include "fichas/_campo.html" with campo=form.pv_max_manual %}
         {% include "fichas/_campo.html" with campo=form.defesa %}
         {% include "fichas/_campo.html" with campo=form.mov %}
         {% include "fichas/_campo.html" with campo=form.fadiga %}
@@ -159,7 +160,7 @@
   <section class="painel" aria-labelledby="s-prof">
     <h2 id="s-prof" class="faixa-secao">Proficiências universais</h2>
     <div class="painel-corpo">
-      <p class="texto-suave">Digite o bônus nas proficiências que o personagem possui. Deixe em branco as que ele não tem.</p>
+      <p class="texto-suave">Toda proficiência começa em -5 (sem treino). Escolha 0, +2, +4 ou V (vantagem) nas que o personagem possui.</p>
       {% if form.proficiencias %}
       <div class="prof-form">
         {% for c in form.campos_proficiencias %}
@@ -171,6 +172,13 @@
         {% endfor %}
       </div>
       {% else %}<p class="texto-suave">O mestre ainda não cadastrou proficiências.</p>{% endif %}
+    </div>
+  </section>
+
+  <section class="painel" aria-labelledby="s-lore">
+    <h2 id="s-lore" class="faixa-secao">Lore e observações</h2>
+    <div class="painel-corpo">
+      {% include "fichas/_campo.html" with campo=form.lore %}
     </div>
   </section>
 

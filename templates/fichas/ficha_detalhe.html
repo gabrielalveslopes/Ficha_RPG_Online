@@ -16,7 +16,7 @@
   <a href="#identidade">Identidade</a><a href="#atributos">Atributos e estado</a>
   <a href="#combate">Combate</a><a href="#perfil">Qualidades e trunfos</a>
   <a href="#mochila">Mochila</a><a href="#recursos">Recursos e slots</a>
-  <a href="#proficiencias">Proficiências</a><a href="#itens">Itens encontrados</a>
+  <a href="#proficiencias">Proficiências</a><a href="#lore">Lore</a><a href="#itens">Itens encontrados</a>
 </nav>
 
 <section class="painel" id="identidade" aria-labelledby="t-ident">
@@ -48,11 +48,14 @@
     <h2 id="t-est" class="faixa-secao">Estado</h2>
     <div class="painel-corpo">
       <dl class="grade-estado">
-        <div class="dado"><dt>PV</dt><dd class="caixa caixa-num">{{ ficha.pv|default_if_none:"—" }}</dd></div>
         <div class="dado"><dt>DEF</dt><dd class="caixa caixa-num">{{ ficha.defesa|default_if_none:"—" }}</dd></div>
         <div class="dado"><dt>MOV</dt><dd class="caixa caixa-num">{{ ficha.mov|default_if_none:"—" }}</dd></div>
         <div class="dado"><dt>FADIGA</dt><dd class="caixa caixa-num">{{ ficha.fadiga|default_if_none:"—" }}</dd></div>
       </dl>
+      <div class="vital">
+        <label for="medidor-pv">PV (Pontos de Vida): <strong>{{ ficha.pv }} de {{ ficha.pv_max }}</strong></label>
+        <progress id="medidor-pv" class="medidor medidor-pv" value="{{ ficha.pv }}" max="{{ ficha.pv_max|default:1 }}">{{ ficha.pv }} de {{ ficha.pv_max }}</progress>
+      </div>
       <div class="vital">
         <label for="medidor-sf">SF (Sangue Frio): <strong>{{ ficha.sf_atual }} de {{ ficha.sf_max }}</strong></label>
         <progress id="medidor-sf" class="medidor medidor-sf" value="{{ ficha.sf_atual }}" max="{{ ficha.sf_max|default:1 }}">{{ ficha.sf_atual }} de {{ ficha.sf_max }}</progress>
@@ -113,7 +116,7 @@
 </div>
 
 <section class="painel" id="mochila" aria-labelledby="t-moc">
-  <h2 id="t-moc" class="faixa-secao">Mochila ({{ mochila|length }} de {{ ficha.capacidade_mochila }})</h2>
+  <h2 id="t-moc" class="faixa-secao">Mochila ({{ mochila|length }} de {{ ficha.capacidade_mochila }} slots)</h2>
   <div class="painel-corpo">
     {% if mochila %}
     <ol class="lista-mochila">
@@ -151,13 +154,31 @@
 <section class="painel" id="proficiencias" aria-labelledby="t-prof">
   <h2 id="t-prof" class="faixa-secao">Proficiências universais</h2>
   <div class="painel-corpo">
-    {% if proficiencias %}
+    <p class="texto-suave pequeno">Sem treino vale -5. Com treino pode ser 0, +2, +4 ou V (vantagem).</p>
+    {% if proficiencias_treinadas %}
     <ul class="prof-lista">
-      {% for p in proficiencias %}
-      <li><span>{{ p.proficiencia.nome }}</span><span class="caixa caixa-bonus"><span class="so-leitor">Bônus: </span>{{ p.bonus|stringformat:"+d" }}</span></li>
+      {% for nome, rotulo, valor in proficiencias_treinadas %}
+      <li><span>{{ nome }}</span><span class="caixa caixa-bonus"><span class="so-leitor">Bônus: </span>{{ rotulo }}</span></li>
       {% endfor %}
     </ul>
-    {% else %}<p class="texto-suave">Nenhuma proficiência com bônus registrado.</p>{% endif %}
+    {% else %}<p class="texto-suave">Nenhuma proficiência treinada ainda.</p>{% endif %}
+    {% if proficiencias_sem_treino %}
+    <details class="sem-treino">
+      <summary>Sem treino (-5): {{ proficiencias_sem_treino|length }} proficiência{{ proficiencias_sem_treino|length|pluralize }}</summary>
+      <ul class="prof-lista">
+        {% for nome, rotulo, valor in proficiencias_sem_treino %}
+        <li><span>{{ nome }}</span><span class="caixa caixa-bonus"><span class="so-leitor">Bônus: </span>{{ rotulo }}</span></li>
+        {% endfor %}
+      </ul>
+    </details>
+    {% endif %}
+  </div>
+</section>
+
+<section class="painel" id="lore" aria-labelledby="t-lore">
+  <h2 id="t-lore" class="faixa-secao">Lore e observações</h2>
+  <div class="painel-corpo">
+    {% if ficha.lore %}<div class="lore-texto">{{ ficha.lore|linebreaks }}</div>{% else %}<p class="texto-suave">Nada escrito ainda. Use “Editar ficha” para contar a história do personagem e guardar anotações.</p>{% endif %}
   </div>
 </section>
 
@@ -170,16 +191,19 @@
     {% if itens %}
     <ul class="lista-itens">
       {% for item in itens %}
-      <li class="item">
+      <li class="item{% if item.foto %} item-com-foto{% endif %}">
+        {% if item.foto %}<img class="item-foto" src="{% url 'item_foto' item.pk %}" alt="Foto de {{ item.nome }}" loading="lazy">{% endif %}
+        <div class="item-conteudo">
         <h3 class="item-nome">{{ item.nome }} <span class="qtd">× {{ item.quantidade }}</span>{% if item.deixado %} <span class="etiqueta">Deixado</span>{% endif %}</h3>
         {% if item.descricao %}<p>{{ item.descricao|linebreaksbr }}</p>{% endif %}
         <div class="acoes">
-          <form method="post" action="{% url 'item_pegar' item.pk %}" class="form-inline">{% csrf_token %}<button type="submit" class="botao botao-primario">Pegar (vai para a mochila)</button></form>
+          <form method="post" action="{% url 'item_pegar' item.pk %}" class="form-inline">{% csrf_token %}<button type="submit" class="botao botao-primario">Pegar ({{ item.quantidade }} slot{{ item.quantidade|pluralize }} da mochila)</button></form>
           {% if not item.deixado %}<form method="post" action="{% url 'item_deixar' item.pk %}" class="form-inline">{% csrf_token %}<button type="submit" class="botao botao-secundario">Deixar</button></form>{% endif %}
           {% if eh_mestre %}
           <a class="botao botao-secundario" href="{% url 'item_editar' item.pk %}">Editar</a>
           <a class="botao botao-perigo" href="{% url 'item_excluir' item.pk %}">Excluir</a>
           {% endif %}
+        </div>
         </div>
       </li>
       {% endfor %}
