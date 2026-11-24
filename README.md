@@ -60,9 +60,9 @@ página protegida `/fichas/<n>/foto/`, que confere se quem pede é o mestre ou o
 ## 2c. Pegar e deixar itens
 
 Na ficha, cada item encontrado tem os botões **Pegar** e **Deixar**; cada item da mochila tem **Deixar**.
-- **Pegar:** o item sai dos itens encontrados e entra na mochila (se a mochila já tiver 15 itens, aparece um erro). Se a quantidade for maior que 1, ela vai no nome, ex.: “Lanterna (×2)”.
+- **Pegar:** o item vai para a mochila e **cada unidade ocupa 1 slot**: pegar 5 unidades preenche 5 linhas da mochila. Se não couber tudo, pega o que couber e o resto continua nos itens encontrados. Com a mochila cheia, aparece um erro.
 - **Deixar** (item encontrado): fica marcado como “Deixado”, mas continua na área privada para ser pego depois.
-- **Deixar** (item da mochila): sai da mochila e volta para os itens encontrados, marcado como “Deixado”.
+- **Deixar** (item da mochila): sai da mochila e volta para os itens encontrados, marcado como “Deixado” (itens iguais deixados se juntam em um só, com a quantidade somada).
 Mestre e dono da ficha podem usar os botões; qualquer outra pessoa recebe 404. Os botões só aceitam POST (com CSRF).
 
 ## 2d. Trunfos (máximo 3)
@@ -71,8 +71,8 @@ O próprio jogador escreve os trunfos na ficha (nome e descrição), no máximo 
 
 ## 2e. Enviar vários itens e tabela de itens
 
-- **Tabela de itens** (`Itens encontrados → Tabela de itens`): uma “planilha” em que o mestre cadastra itens predefinidos (nome, categoria, descrição) e edita todas as linhas de uma vez.
-- **Enviar itens** (`Itens encontrados → Enviar itens`, ou o botão na ficha): marque uma ou mais fichas, digite a quantidade dos itens da tabela que quer enviar e, se precisar, até 3 itens avulsos. Tudo é criado de uma só vez para cada ficha marcada. Os itens continuam privados (só o mestre e o dono da ficha).
+- **Tabela de itens** (`Itens encontrados → Tabela de itens`): o mestre adiciona itens um a um (foto, nome, categoria e descrição curta de até 200 caracteres). Cada item vira um **cartão** pronto para envio. **Não há limite** de itens, e há um filtro para achar cartões rápido. Editar ou apagar um cartão não muda itens já enviados.
+- **Enviar itens** (`Itens encontrados → Enviar itens`, ou o botão na ficha): marque uma ou mais fichas, digite a quantidade nos cartões que quer enviar e, se precisar, até 3 itens avulsos. Tudo é criado de uma só vez para cada ficha marcada, e a foto do cartão vai junto (uma cópia para cada ficha). Os itens e as fotos continuam privados (só o mestre e o dono da ficha; as fotos só saem por páginas protegidas). Ao **Pegar** um item, cada unidade entra na mochila como um slot, só com o nome (a mochila da ficha de papel não tem foto).
 
 ## 3. Configurar origens, proficiências e trunfos
 
@@ -118,9 +118,11 @@ Para rodar as versões automáticas destas verificações: `python manage.py tes
   orientação: a ficha salva com qualquer soma, e mostra um aviso.
 - **Máximos:** Sangue Frio = SF × 3 e Anticorpos = RES × 10, calculados automaticamente; o mestre
   pode definir um valor manual. Valores atuais só o mestre altera; começam cheios.
-- **Proficiências:** seguem a ficha de papel: cada uma tem só um **bônus**; campo em branco = o personagem não possui. (O campo “nível” foi removido.)
+- **Proficiências:** seguem a ficha de papel: cada uma tem só um **bônus**. O padrão é **-5** (sem treino) e o jogador pode subir para **0, +2, +4 ou V (vantagem)**. Só os graus acima de -5 são guardados; na ficha, as sem treino ficam numa lista recolhida. (O campo “nível” foi removido.)
+- **Lore e observações:** campo grande de texto no final da ficha (o jogador e o mestre editam; só eles veem).
 - **Atributo SOC:** a ficha usa “SOC” (Social); no banco o campo continua com o nome antigo `influencia`.
-- **Estado:** PV, DEF, MOV e FADIGA são números simples, editados só pelo mestre (como SF e ANT atuais). Recursos (M W E T D F R) e slots podem ser editados pelo jogador.
+- **PV:** o máximo é calculado automaticamente: **(COR + RES) × 2** (o mestre pode definir um valor manual). O PV atual começa cheio e só o mestre altera.
+- **Estado:** DEF, MOV e FADIGA são números simples, editados só pelo mestre (como SF e ANT atuais). Recursos (M W E T D F R) e slots podem ser editados pelo jogador.
 - **Mochila:** até 15 itens com “slot”; é separada dos itens encontrados.
 - **Itens encontrados:** tabela separada, só o mestre cria/edita.
 - **Uma ficha por jogador:** o jogador não consegue criar uma segunda (o botão some e o servidor bloqueia). O mestre pode ter várias fichas no próprio usuário (para NPCs), mas não cria uma segunda para um jogador.
