@@ -9,7 +9,8 @@ Resumo:
 from django.conf import settings
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
-from django.db.models.signals import post_save
+from django.db import transaction
+from django.db.models.signals import post_delete, post_save
 from django.dispatch import receiver
 
 
@@ -181,7 +182,11 @@ class Ficha(models.Model):
     )
 
     # Estado (só o mestre altera): valores simples, sem regra de cálculo.
-    pv = models.PositiveSmallIntegerField("PV", null=True, blank=True)
+    pv = models.PositiveSmallIntegerField("PV atual", null=True, blank=True)
+    pv_max_manual = models.PositiveSmallIntegerField(
+        "PV máximo", null=True, blank=True,
+        help_text="Deixe em branco para usar o padrão: (COR + RES) × 2.",
+    )
     defesa = models.PositiveSmallIntegerField("DEF", null=True, blank=True)
     mov = models.PositiveSmallIntegerField("MOV", null=True, blank=True)
     fadiga = models.PositiveSmallIntegerField("Fadiga", null=True, blank=True)
@@ -205,6 +210,11 @@ class Ficha(models.Model):
         "mochila", max_length=10, choices=TipoMochila.choices, default=TipoMochila.COMUM
     )
 
+    lore = models.TextField(
+        "lore e observações", blank=True,
+        help_text="História do personagem, anotações da campanha, o que quiser lembrar.",
+    )
+
     criada_em = models.DateTimeField(auto_now_add=True)
     atualizada_em = models.DateTimeField(auto_now=True)
 
@@ -219,6 +229,12 @@ class Ficha(models.Model):
         return self.nome_personagem
 
     # Máximos: valor manual (se o mestre definiu) ou a regra padrão do livro.
+    @property
+    def pv_max(self):
+        if self.pv_max_manual is not None:
+            return self.pv_max_manual
+        return (self.cor + self.resistencia) * 2
+
     @property
     def sf_max(self):
         return self.sf_max_manual if self.sf_max_manual is not None else self.sangue_frio * 3
@@ -251,11 +267,26 @@ class Ficha(models.Model):
 
     def save(self, *args, **kwargs):
         # Ficha nova (ou valor atual em branco) começa com os valores cheios.
+        if self.pv is None:
+            self.pv = self.pv_max
         if self.sf_atual is None:
             self.sf_atual = self.sf_max
         if self.anticorpos_atual is None:
             self.anticorpos_atual = self.anticorpos_max
         super().save(*args, **kwargs)
+
+
+class BonusProficiencia(models.TextChoices):
+    """Graus de uma proficiência. O padrão é -5 (sem treino); V = vantagem."""
+
+    MENOS_CINCO = "-5", "-5"
+    ZERO = "0", "0"
+    MAIS_DOIS = "2", "+2"
+    MAIS_QUATRO = "4", "+4"
+    VANTAGEM = "V", "V"
+
+
+BONUS_PADRAO = BonusProficiencia.MENOS_CINCO.value
 
 
 class FichaProficiencia(models.Model):
@@ -265,7 +296,9 @@ class FichaProficiencia(models.Model):
     proficiencia = models.ForeignKey(
         Proficiencia, on_delete=models.PROTECT, verbose_name="proficiência"
     )
-    bonus = models.SmallIntegerField("bônus", default=0)
+    bonus = models.CharField(
+        "bônus", max_length=2, choices=BonusProficiencia.choices, default=BonusProficiencia.MENOS_CINCO
+    )
 
     class Meta:
         ordering = ["proficiencia__nome"]
@@ -278,7 +311,7 @@ class FichaProficiencia(models.Model):
         verbose_name_plural = "proficiências da ficha"
 
     def __str__(self):
-        return f"{self.proficiencia} ({self.bonus:+d})"
+        return f"{self.proficiencia} ({self.get_bonus_display()})"
 
 
 class TrunfoFicha(models.Model):
@@ -350,6 +383,7 @@ class ItemEncontrado(models.Model):
     quantidade = models.PositiveIntegerField(
         "quantidade", default=1, validators=[MinValueValidator(1)]
     )
+    foto = models.ImageField("foto do item", upload_to="itens/", blank=True)
     deixado = models.BooleanField(
         "deixado", default=False,
         help_text="Marcado quando o jogador deixou o item para trás (ele continua podendo pegá-lo).",
@@ -377,6 +411,7 @@ class ItemModelo(models.Model):
     nome = models.CharField("nome do item", max_length=120)
     categoria = models.CharField("categoria", max_length=60, blank=True, help_text="Ex.: Comida, Remédios, Munição.")
     descricao = models.TextField("descrição", blank=True)
+    foto = models.ImageField("foto do item", upload_to="itens/", blank=True)
 
     class Meta:
         ordering = ["categoria", "nome"]
@@ -385,3 +420,15 @@ class ItemModelo(models.Model):
 
     def __str__(self):
         return self.nome
+
+
+# ------------------------------------------- Limpeza das fotos ao apagar ----
+def _apagar_arquivo_da_foto(sender, instance, **kwargs):
+    """Remove o arquivo de imagem do disco quando o registro é apagado (após confirmar a transação)."""
+    if instance.foto:
+        armazenamento, nome = instance.foto.storage, instance.foto.name
+        transaction.on_commit(lambda: armazenamento.delete(nome))
+
+
+for _modelo in (Ficha, ItemModelo, ItemEncontrado):
+    post_delete.connect(_apagar_arquivo_da_foto, sender=_modelo)
