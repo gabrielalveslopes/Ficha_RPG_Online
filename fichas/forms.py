@@ -10,6 +10,8 @@ from django.db.models import Q
 
 from .models import (
     ATRIBUTO_CAMPOS,
+    BONUS_PADRAO,
+    BonusProficiencia,
     CAPACIDADE_MOCHILA,
     MOCHILA_MAXIMO,
     RECURSO_CAMPOS,
@@ -93,7 +95,7 @@ class FichaJogadorForm(forms.ModelForm):
         model = Ficha
         fields = [
             "nome_personagem", "origem", "foto", *ATRIBUTO_CAMPOS,
-            "qualidades", "defeitos", *RECURSO_CAMPOS, *SLOT_CAMPOS, "tipo_mochila",
+            "qualidades", "defeitos", *RECURSO_CAMPOS, *SLOT_CAMPOS, "tipo_mochila", "lore",
         ]
         widgets = {
             **{campo: _numero(1, 10) for campo in ATRIBUTO_CAMPOS},
@@ -104,6 +106,7 @@ class FichaJogadorForm(forms.ModelForm):
             "foto": forms.FileInput(attrs={"accept": "image/*", "data-previa": "previa-foto"}),
             "qualidades": forms.Textarea(attrs={"rows": 6}),
             "defeitos": forms.Textarea(attrs={"rows": 6}),
+            "lore": forms.Textarea(attrs={"rows": 18}),
         }
 
     def __init__(self, *args, **kwargs):
@@ -128,9 +131,9 @@ class FichaJogadorForm(forms.ModelForm):
             Proficiencia.objects.filter(Q(ativo=True) | Q(pk__in=list(bonus_atuais)))
         )
         for prof in self.proficiencias:
-            self.fields[f"prof_{prof.pk}"] = forms.IntegerField(
-                label=prof.nome, required=False, initial=bonus_atuais.get(prof.pk),
-                widget=forms.NumberInput(attrs={"inputmode": "numeric"}),
+            self.fields[f"prof_{prof.pk}"] = forms.ChoiceField(
+                label=prof.nome, choices=BonusProficiencia.choices,
+                initial=bonus_atuais.get(prof.pk, BONUS_PADRAO),
             )
         estilizar(self)
 
@@ -171,7 +174,7 @@ class FichaJogadorForm(forms.ModelForm):
     def salvar_proficiencias(self, ficha):
         for prof in self.proficiencias:
             bonus = self.cleaned_data.get(f"prof_{prof.pk}")
-            if bonus is None:
+            if bonus in (None, "", BONUS_PADRAO):  # -5 é o padrão: não precisa guardar
                 FichaProficiencia.objects.filter(ficha=ficha, proficiencia=prof).delete()
             else:
                 FichaProficiencia.objects.update_or_create(
@@ -185,7 +188,7 @@ class FichaMestreForm(FichaJogadorForm):
     class Meta(FichaJogadorForm.Meta):
         fields = [
             "jogador", *FichaJogadorForm.Meta.fields,
-            "pv", "defesa", "mov", "fadiga",
+            "pv", "pv_max_manual", "defesa", "mov", "fadiga",
             "sf_atual", "sf_max_manual", "anticorpos_atual", "anticorpos_max_manual",
         ]
 
@@ -314,19 +317,40 @@ class ItemForm(forms.ModelForm):
 
 # ------------------------------------------- Tabela de itens e envio em lote ----
 class ItemModeloForm(forms.ModelForm):
+    """Um item da tabela do mestre: foto, nome e uma descrição curta (vira um cartão)."""
+
+    descricao = forms.CharField(
+        label="descrição curta", required=False, max_length=200,
+        widget=forms.Textarea(attrs={"rows": 3, "maxlength": 200}),
+    )
+    remover_foto = forms.BooleanField(label="Remover a foto atual", required=False)
+
     class Meta:
         model = ItemModelo
-        fields = ["nome", "categoria", "descricao"]
-        widgets = {"descricao": forms.Textarea(attrs={"rows": 2})}
+        fields = ["nome", "categoria", "descricao", "foto"]
+        widgets = {"foto": forms.FileInput(attrs={"accept": "image/*", "data-previa": "previa-foto"})}
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self._foto_antiga = self.instance.foto.name if (self.instance.pk and self.instance.foto) else ""
         estilizar(self)
 
+    def clean_foto(self):
+        foto = self.cleaned_data.get("foto")
+        if isinstance(foto, UploadedFile):
+            return processar_foto(foto)
+        return foto
 
-ItemModeloFormSet = forms.modelformset_factory(
-    ItemModelo, form=ItemModeloForm, extra=5, can_delete=True
-)
+    def clean(self):
+        dados = super().clean()
+        if dados.get("remover_foto") and not isinstance(dados.get("foto"), ContentFile):
+            dados["foto"] = False
+        return dados
+
+    def descartar_foto_antiga(self, modelo):
+        atual = modelo.foto.name if modelo.foto else ""
+        if self._foto_antiga and self._foto_antiga != atual:
+            modelo.foto.storage.delete(self._foto_antiga)
 
 
 class EnvioItensForm(forms.Form):
@@ -376,11 +400,11 @@ class EnvioItensForm(forms.Form):
         for m in self.modelos:
             quantidade = dados.get(f"modelo_{m.pk}")
             if quantidade:
-                itens.append((m.nome, m.descricao, quantidade))
+                itens.append((m.nome, m.descricao, quantidade, m))
         for n in range(1, self.AVULSOS + 1):
             nome = (dados.get(f"avulso_nome_{n}") or "").strip()
             if nome:
-                itens.append((nome, "", dados.get(f"avulso_qtd_{n}") or 1))
+                itens.append((nome, "", dados.get(f"avulso_qtd_{n}") or 1, None))
         if not itens and not self.errors:
             raise forms.ValidationError(
                 "Escolha ao menos um item da tabela (quantidade maior que 0) ou digite um item avulso."
@@ -389,12 +413,26 @@ class EnvioItensForm(forms.Form):
         return dados
 
     def enviar(self, usuario):
-        """Cria os itens para cada ficha escolhida. Devolve (total de itens criados, nº de fichas)."""
+        """Cria os itens para cada ficha escolhida (copiando a foto do cartão, se houver).
+        Devolve (total de itens criados, nº de fichas)."""
         fichas = list(self.cleaned_data["fichas"])
-        novos = [
-            ItemEncontrado(ficha=ficha, nome=nome, descricao=descricao, quantidade=quantidade, criado_por=usuario)
-            for ficha in fichas
-            for nome, descricao, quantidade in self.itens
-        ]
-        ItemEncontrado.objects.bulk_create(novos)
-        return len(novos), len(fichas)
+        conteudos = {}
+        for _nome, _descricao, _qtd, modelo in self.itens:
+            if modelo and modelo.foto and modelo.pk not in conteudos:
+                try:
+                    with modelo.foto.open("rb") as arquivo:
+                        conteudos[modelo.pk] = arquivo.read()
+                except OSError:
+                    pass  # arquivo sumiu do disco: envia o item sem foto
+        total = 0
+        for ficha in fichas:
+            for nome, descricao, quantidade, modelo in self.itens:
+                item = ItemEncontrado(
+                    ficha=ficha, nome=nome, descricao=descricao,
+                    quantidade=quantidade, criado_por=usuario,
+                )
+                if modelo and modelo.pk in conteudos:
+                    item.foto = ContentFile(conteudos[modelo.pk], name=f"{uuid.uuid4().hex}.jpg")
+                item.save()
+                total += 1
+        return total, len(fichas)
