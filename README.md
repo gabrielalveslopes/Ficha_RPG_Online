@@ -118,7 +118,7 @@ Para rodar as versões automáticas destas verificações: `python manage.py tes
   orientação: a ficha salva com qualquer soma, e mostra um aviso.
 - **Máximos:** Sangue Frio = SF × 3 e Anticorpos = RES × 10, calculados automaticamente; o mestre
   pode definir um valor manual. Valores atuais só o mestre altera; começam cheios.
-- **Proficiências:** seguem a ficha de papel: cada uma tem só um **bônus**. O padrão é **-5** (sem treino) e o jogador pode subir para **0, +2, +4 ou V (vantagem)**. Só os graus acima de -5 são guardados; na ficha, as sem treino ficam numa lista recolhida. (O campo “nível” foi removido.)
+- **Proficiências:** seguem a ficha de papel: cada uma tem só um **bônus**. O padrão é **-5** (sem treino) e o jogador pode subir para **0, +2, +4 ou V (vantagem)**. Só os graus acima de -5 são guardados, mas a ficha mostra **todas** as proficiências na ordem da ficha de papel, com as treinadas em destaque. (O campo “nível” foi removido.)
 - **Lore e observações:** campo grande de texto no final da ficha (o jogador e o mestre editam; só eles veem).
 - **Atributo SOC:** a ficha usa “SOC” (Social); no banco o campo continua com o nome antigo `influencia`.
 - **PV:** o máximo é calculado automaticamente: **(COR + RES) × 2** (o mestre pode definir um valor manual). O PV atual começa cheio e só o mestre altera.

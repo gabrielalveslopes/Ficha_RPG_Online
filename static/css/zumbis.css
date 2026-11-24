@@ -299,6 +299,12 @@ input[type="file"].campo { padding: .6rem; font-family: var(--corpo); }
 #id_lore { min-height: 18rem; line-height: 1.6; }
 .lore-texto { min-height: 12rem; padding: .8rem 1rem; border: 2px solid var(--oliva); background: var(--papel-3); font-family: var(--maquina); line-height: 1.7; overflow-wrap: anywhere; }
 .lore-texto p { margin-bottom: .8rem; }
-.sem-treino { margin-top: .9rem; border-top: 2px dashed var(--oliva-esc); padding-top: .6rem; }
-.sem-treino summary { cursor: pointer; font-weight: 700; min-height: 44px; display: flex; align-items: center; }
 .prof-item select.campo { width: 6rem; }
+
+/* Tabela completa de proficiências (colunas como na ficha de papel) */
+.prof-lista { display: block; column-gap: 2rem; }
+.prof-lista li { break-inside: avoid; }
+.prof-treinada > span:first-child { font-weight: 700; }
+.prof-treinada .caixa-bonus { background: var(--papel-2); border-color: var(--sangue); border-width: 3px; font-weight: 700; }
+@media (min-width: 640px) { .prof-lista { column-count: 2; } }
+@media (min-width: 900px) { .prof-lista { column-count: 3; } }

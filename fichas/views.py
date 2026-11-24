@@ -85,13 +85,12 @@ def ficha_detalhe(request, pk):
     todas = []
     for prof in Proficiencia.objects.filter(Q(ativo=True) | Q(pk__in=list(graus))):
         valor = graus.get(prof.pk, BONUS_PADRAO)
-        todas.append((prof.nome, rotulos.get(valor, valor), valor))
+        todas.append((prof.nome, rotulos.get(valor, valor), valor != BONUS_PADRAO))
     contexto = {
         "ficha": ficha,
         "armas": ficha.armas.all(),
         "mochila": ficha.mochila.all(),
-        "proficiencias_treinadas": [p for p in todas if p[2] != BONUS_PADRAO],
-        "proficiencias_sem_treino": [p for p in todas if p[2] == BONUS_PADRAO],
+        "proficiencias": todas,  # todas as do catálogo, na ordem da ficha de papel
         "trunfos": ficha.trunfos_escolhidos.all(),
         "itens": ficha.itens.all(),  # só chega aqui quem pode ver esta ficha
     }

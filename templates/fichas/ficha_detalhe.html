@@ -154,24 +154,14 @@
 <section class="painel" id="proficiencias" aria-labelledby="t-prof">
   <h2 id="t-prof" class="faixa-secao">Proficiências universais</h2>
   <div class="painel-corpo">
-    <p class="texto-suave pequeno">Sem treino vale -5. Com treino pode ser 0, +2, +4 ou V (vantagem).</p>
-    {% if proficiencias_treinadas %}
+    <p class="texto-suave pequeno">Sem treino vale -5. Com treino pode ser 0, +2, +4 ou V (vantagem). As treinadas ficam em destaque.</p>
+    {% if proficiencias %}
     <ul class="prof-lista">
-      {% for nome, rotulo, valor in proficiencias_treinadas %}
-      <li><span>{{ nome }}</span><span class="caixa caixa-bonus"><span class="so-leitor">Bônus: </span>{{ rotulo }}</span></li>
+      {% for nome, rotulo, treinada in proficiencias %}
+      <li{% if treinada %} class="prof-treinada"{% endif %}><span>{{ nome }}{% if treinada %} <span class="so-leitor">(treinada)</span>{% endif %}</span><span class="caixa caixa-bonus"><span class="so-leitor">Bônus: </span>{{ rotulo }}</span></li>
       {% endfor %}
     </ul>
-    {% else %}<p class="texto-suave">Nenhuma proficiência treinada ainda.</p>{% endif %}
-    {% if proficiencias_sem_treino %}
-    <details class="sem-treino">
-      <summary>Sem treino (-5): {{ proficiencias_sem_treino|length }} proficiência{{ proficiencias_sem_treino|length|pluralize }}</summary>
-      <ul class="prof-lista">
-        {% for nome, rotulo, valor in proficiencias_sem_treino %}
-        <li><span>{{ nome }}</span><span class="caixa caixa-bonus"><span class="so-leitor">Bônus: </span>{{ rotulo }}</span></li>
-        {% endfor %}
-      </ul>
-    </details>
-    {% endif %}
+    {% else %}<p class="texto-suave">O mestre ainda não cadastrou proficiências.</p>{% endif %}
   </div>
 </section>
 
