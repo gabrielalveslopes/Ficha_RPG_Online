@@ -19,11 +19,12 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_POST
 
 from .forms import (
-    ArmaFormSet, EnvioItensForm, FichaJogadorForm, FichaMestreForm, ItemForm, ItemModeloFormSet,
+    ArmaFormSet, EnvioItensForm, FichaJogadorForm, FichaMestreForm, ItemForm, ItemModeloForm,
     MochilaFormSet, TrunfoFormSet,
 )
 from .models import (
-    CAPACIDADE_MOCHILA, PONTOS_SUGERIDOS, Ficha, ItemEncontrado, ItemMochila, TipoMochila, Trunfo, eh_mestre,
+    BONUS_PADRAO, CAPACIDADE_MOCHILA, PONTOS_SUGERIDOS, BonusProficiencia, Ficha, ItemEncontrado,
+    ItemMochila, ItemModelo, Proficiencia, TipoMochila, Trunfo, eh_mestre,
 )
 
 
@@ -78,11 +79,19 @@ def ficha_lista(request):
 @login_required
 def ficha_detalhe(request, pk):
     ficha = _obter_ficha(request, pk)
+    # Toda proficiência do catálogo aparece; as sem treino valem -5 (o padrão).
+    graus = dict(ficha.proficiencias_escolhidas.values_list("proficiencia_id", "bonus"))
+    rotulos = dict(BonusProficiencia.choices)
+    todas = []
+    for prof in Proficiencia.objects.filter(Q(ativo=True) | Q(pk__in=list(graus))):
+        valor = graus.get(prof.pk, BONUS_PADRAO)
+        todas.append((prof.nome, rotulos.get(valor, valor), valor))
     contexto = {
         "ficha": ficha,
         "armas": ficha.armas.all(),
         "mochila": ficha.mochila.all(),
-        "proficiencias": ficha.proficiencias_escolhidas.select_related("proficiencia"),
+        "proficiencias_treinadas": [p for p in todas if p[2] != BONUS_PADRAO],
+        "proficiencias_sem_treino": [p for p in todas if p[2] == BONUS_PADRAO],
         "trunfos": ficha.trunfos_escolhidos.all(),
         "itens": ficha.itens.all(),  # só chega aqui quem pode ver esta ficha
     }
@@ -205,19 +214,69 @@ def item_enviar(request):
     return render(request, "fichas/item_enviar.html", {"form": form})
 
 
+def _resposta_foto(arquivo):
+    if not arquivo:
+        raise Http404
+    resposta = FileResponse(arquivo.open("rb"), content_type="image/jpeg")
+    resposta["Cache-Control"] = "private, max-age=300"
+    resposta["X-Content-Type-Options"] = "nosniff"
+    return resposta
+
+
 @mestre_required
 def item_modelos(request):
-    """Tabela (planilha) de itens predefinidos do mestre: edita todas as linhas de uma vez."""
+    """Tabela do mestre: cartões (foto, nome, descrição) prontos para enviar. Sem limite de itens."""
+    return render(request, "fichas/item_modelos.html", {"modelos": ItemModelo.objects.all()})
+
+
+def _salvar_modelo(request, instancia, titulo):
     if request.method == "POST":
-        formset = ItemModeloFormSet(request.POST, prefix="modelo")
-        if formset.is_valid():
-            formset.save()
-            messages.success(request, "Tabela de itens salva.")
+        form = ItemModeloForm(request.POST, request.FILES, instance=instancia)
+        if form.is_valid():
+            modelo = form.save()
+            form.descartar_foto_antiga(modelo)
+            messages.success(request, f"Item “{modelo.nome}” salvo na tabela.")
             return redirect("item_modelos")
-        messages.error(request, "Não foi possível salvar a tabela. Corrija as linhas indicadas.")
+        messages.error(request, "Não foi possível salvar o item. Corrija os campos abaixo.")
     else:
-        formset = ItemModeloFormSet(prefix="modelo")
-    return render(request, "fichas/item_modelos.html", {"formset": formset})
+        form = ItemModeloForm(instance=instancia)
+    return render(
+        request, "fichas/item_modelo_form.html", {"form": form, "titulo": titulo, "modelo": instancia}
+    )
+
+
+@mestre_required
+def item_modelo_criar(request):
+    return _salvar_modelo(request, ItemModelo(), "Novo item da tabela")
+
+
+@mestre_required
+def item_modelo_editar(request, pk):
+    modelo = get_object_or_404(ItemModelo, pk=pk)
+    return _salvar_modelo(request, modelo, f"Editar item: {modelo.nome}")
+
+
+@mestre_required
+def item_modelo_excluir(request, pk):
+    modelo = get_object_or_404(ItemModelo, pk=pk)
+    if request.method == "POST":
+        nome = modelo.nome
+        modelo.delete()
+        messages.success(request, f"Item “{nome}” removido da tabela. Itens já enviados não são afetados.")
+        return redirect("item_modelos")
+    return render(request, "fichas/item_modelo_confirmar_exclusao.html", {"modelo": modelo})
+
+
+@mestre_required
+def item_modelo_foto(request, pk):
+    return _resposta_foto(get_object_or_404(ItemModelo, pk=pk).foto)
+
+
+@login_required
+def item_foto(request, pk):
+    """Foto de um item encontrado: só o mestre e o dono da ficha."""
+    item = get_object_or_404(ItemEncontrado.objects.visiveis_para(request.user), pk=pk)
+    return _resposta_foto(item.foto)
 
 
 @mestre_required
@@ -274,23 +333,43 @@ def item_excluir(request, pk):
 @login_required
 @require_POST
 def item_pegar(request, pk):
-    """Item encontrado -> mochila do personagem."""
+    """Item encontrado -> mochila. Cada unidade ocupa 1 slot (5 unidades = 5 linhas da mochila).
+    Se não couber tudo, pega o que couber e o resto continua nos itens encontrados."""
     item = get_object_or_404(
         ItemEncontrado.objects.visiveis_para(request.user).select_related("ficha"), pk=pk
     )
     ficha = item.ficha
-    if ficha.mochila.count() >= ficha.capacidade_mochila:
+    livres = ficha.capacidade_mochila - ficha.mochila.count()
+    if livres <= 0:
         messages.error(
             request,
-            f"A mochila está cheia ({ficha.capacidade_mochila} itens). "
+            f"A mochila está cheia ({ficha.capacidade_mochila} slots). "
             f"Deixe algum item antes de pegar “{item.nome}”.",
         )
         return redirect("ficha_detalhe", pk=ficha.pk)
-    nome = f"{item.nome} (×{item.quantidade})" if item.quantidade > 1 else item.nome
+    total = item.quantidade
+    pegos = min(total, livres)
     with transaction.atomic():
-        ItemMochila.objects.create(ficha=ficha, item=nome[:150])
-        item.delete()
-    messages.success(request, f"{ficha.nome_personagem} pegou “{item.nome}” e guardou na mochila.")
+        ItemMochila.objects.bulk_create(
+            [ItemMochila(ficha=ficha, item=item.nome[:150]) for _ in range(pegos)]
+        )
+        if pegos < total:
+            item.quantidade = total - pegos
+            item.save(update_fields=["quantidade"])
+        else:
+            item.delete()
+    if pegos < total:
+        messages.warning(
+            request,
+            f"A mochila encheu: só couberam {pegos} de {total} “{item.nome}”. "
+            f"Os {total - pegos} restantes continuam nos itens encontrados.",
+        )
+    else:
+        messages.success(
+            request,
+            f"{ficha.nome_personagem} pegou {pegos}× “{item.nome}” "
+            f"e ocupou {pegos} slot{'s' if pegos > 1 else ''} da mochila.",
+        )
     return redirect("ficha_detalhe", pk=ficha.pk)
 
 
@@ -314,10 +393,17 @@ def mochila_deixar(request, pk):
     visiveis = Ficha.objects.visiveis_para(request.user)
     item = get_object_or_404(ItemMochila.objects.select_related("ficha").filter(ficha__in=visiveis), pk=pk)
     ficha = item.ficha
+    nome = item.item[:120]
     with transaction.atomic():
-        ItemEncontrado.objects.create(
-            ficha=ficha, nome=item.item[:120], quantidade=1, deixado=True, criado_por=request.user
-        )
+        # Junta com o que já foi deixado antes (mesmo nome), em vez de criar um item por unidade.
+        ja_deixado = ItemEncontrado.objects.filter(ficha=ficha, nome=nome, deixado=True).first()
+        if ja_deixado:
+            ja_deixado.quantidade += 1
+            ja_deixado.save(update_fields=["quantidade"])
+        else:
+            ItemEncontrado.objects.create(
+                ficha=ficha, nome=nome, quantidade=1, deixado=True, criado_por=request.user
+            )
         item.delete()
     messages.success(request, f"{ficha.nome_personagem} deixou “{item.item}” para trás.")
     return redirect("ficha_detalhe", pk=ficha.pk)
