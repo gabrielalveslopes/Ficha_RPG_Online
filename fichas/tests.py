@@ -187,6 +187,9 @@ class PermissoesTest(TestCase):
     def test_maximos_padrao(self):
         ficha = Ficha.objects.create(jogador=self.ana, nome_personagem="X", sangue_frio=4, resistencia=5)
         self.assertEqual((ficha.sf_max, ficha.anticorpos_max), (12, 50))
+        # PV = (COR + RES) x 2, com COR = 3 e RES = 5 -> 16
+        ficha_pv = Ficha.objects.create(jogador=self.bruno, nome_personagem="Y", cor=3, resistencia=5)
+        self.assertEqual((ficha_pv.pv_max, ficha_pv.pv), (16, 16))
         self.assertEqual((ficha.sf_atual, ficha.anticorpos_atual), (12, 50))
 
 
@@ -247,14 +250,37 @@ class FotoETestes(TestCase):
         self.ficha_ana.refresh_from_db()
         self.assertFalse(self.ficha_ana.foto)
 
-    def test_proficiencia_com_bonus_e_removida_quando_em_branco(self):
+    def test_proficiencia_padrao_menos_cinco_e_graus(self):
         prof = Proficiencia.objects.create(nome="Escalar (COR)")
         self.client.login(username="ana", password=SENHA)
         url = reverse("ficha_editar", args=[self.ficha_ana.pk])
-        self.client.post(url, dados_ficha(nome_personagem="Ana", **{f"prof_{prof.pk}": 2}))
-        self.assertEqual(self.ficha_ana.proficiencias_escolhidas.get().bonus, 2)
-        self.client.post(url, dados_ficha(nome_personagem="Ana", **{f"prof_{prof.pk}": ""}))
+        pagina = self.client.get(url)
+        self.assertContains(pagina, f'name="prof_{prof.pk}"')
+        # com -5 nada é guardado
+        self.client.post(url, dados_ficha(nome_personagem="Ana", **{f"prof_{prof.pk}": "-5"}))
         self.assertFalse(self.ficha_ana.proficiencias_escolhidas.exists())
+        for valor in ("0", "2", "4", "V"):
+            self.client.post(url, dados_ficha(nome_personagem="Ana", **{f"prof_{prof.pk}": valor}))
+            self.assertEqual(self.ficha_ana.proficiencias_escolhidas.get().bonus, valor)
+        # voltar para -5 remove o registro
+        self.client.post(url, dados_ficha(nome_personagem="Ana", **{f"prof_{prof.pk}": "-5"}))
+        self.assertFalse(self.ficha_ana.proficiencias_escolhidas.exists())
+
+    def test_grau_de_proficiencia_invalido_e_recusado(self):
+        prof = Proficiencia.objects.create(nome="Escalar (COR)")
+        self.client.login(username="ana", password=SENHA)
+        url = reverse("ficha_editar", args=[self.ficha_ana.pk])
+        r = self.client.post(url, dados_ficha(nome_personagem="Ana", **{f"prof_{prof.pk}": "7"}))
+        self.assertEqual(r.status_code, 200)
+        self.assertFalse(self.ficha_ana.proficiencias_escolhidas.exists())
+
+    def test_lore_e_salva_e_aparece_na_ficha(self):
+        self.client.login(username="ana", password=SENHA)
+        url = reverse("ficha_editar", args=[self.ficha_ana.pk])
+        self.client.post(url, dados_ficha(nome_personagem="Ana", lore="Cresceu em Corvus City.\nPerdeu o irmão."))
+        self.ficha_ana.refresh_from_db()
+        self.assertIn("Corvus City", self.ficha_ana.lore)
+        self.assertContains(self.client.get(reverse("ficha_detalhe", args=[self.ficha_ana.pk])), "Perdeu o irmão")
 
 
 class PegarEDeixarTest(TestCase):
@@ -273,7 +299,8 @@ class PegarEDeixarTest(TestCase):
         r = self.client.post(reverse("item_pegar", args=[self.item.pk]))
         self.assertEqual(r.status_code, 302)
         self.assertFalse(ItemEncontrado.objects.filter(pk=self.item.pk).exists())
-        self.assertEqual(self.ficha.mochila.get().item, "Lanterna (×2)")
+        self.assertEqual(self.ficha.mochila.count(), 2)  # 2 unidades = 2 slots
+        self.assertTrue(all(m.item == "Lanterna" for m in self.ficha.mochila.all()))
 
     def test_pegar_por_get_nao_funciona(self):
         self.client.login(username="ana", password=SENHA)
@@ -301,13 +328,39 @@ class PegarEDeixarTest(TestCase):
             ItemMochila.objects.create(ficha=self.ficha, item=f"Item {n}")
         self.client.login(username="ana", password=SENHA)
         self.client.post(reverse("item_pegar", args=[self.item.pk]))
-        self.assertEqual(self.ficha.mochila.count(), 11)
+        self.assertEqual(self.ficha.mochila.count(), 12)  # 10 + 2 unidades (a mochila militar tem 15)
 
     def test_deixar_item_encontrado_marca_como_deixado(self):
         self.client.login(username="ana", password=SENHA)
         self.client.post(reverse("item_deixar", args=[self.item.pk]))
         self.item.refresh_from_db()
         self.assertTrue(self.item.deixado)
+
+    def test_pegar_cinco_ocupa_cinco_slots(self):
+        cinco = ItemEncontrado.objects.create(ficha=self.ficha, nome="Munição", quantidade=5)
+        self.client.login(username="ana", password=SENHA)
+        self.client.post(reverse("item_pegar", args=[cinco.pk]))
+        self.assertEqual(self.ficha.mochila.filter(item="Munição").count(), 5)
+        self.assertFalse(ItemEncontrado.objects.filter(pk=cinco.pk).exists())
+
+    def test_pegar_parcial_quando_nao_cabe_tudo(self):
+        for n in range(8):  # mochila comum: 10 slots, restam 2
+            ItemMochila.objects.create(ficha=self.ficha, item=f"Item {n}")
+        cinco = ItemEncontrado.objects.create(ficha=self.ficha, nome="Munição", quantidade=5)
+        self.client.login(username="ana", password=SENHA)
+        self.client.post(reverse("item_pegar", args=[cinco.pk]))
+        self.assertEqual(self.ficha.mochila.filter(item="Munição").count(), 2)
+        cinco.refresh_from_db()
+        self.assertEqual(cinco.quantidade, 3)  # o resto continua nos itens encontrados
+
+    def test_deixar_da_mochila_junta_com_item_ja_deixado(self):
+        a = ItemMochila.objects.create(ficha=self.ficha, item="Faca")
+        b = ItemMochila.objects.create(ficha=self.ficha, item="Faca")
+        self.client.login(username="ana", password=SENHA)
+        self.client.post(reverse("mochila_deixar", args=[a.pk]))
+        self.client.post(reverse("mochila_deixar", args=[b.pk]))
+        deixado = ItemEncontrado.objects.get(ficha=self.ficha, nome="Faca", deixado=True)
+        self.assertEqual(deixado.quantidade, 2)
 
     def test_deixar_item_da_mochila_volta_para_encontrados(self):
         mochila = ItemMochila.objects.create(ficha=self.ficha, item="Faca")
@@ -325,7 +378,7 @@ class PegarEDeixarTest(TestCase):
     def test_mestre_pode_pegar_pelo_jogador(self):
         self.client.login(username="mestre", password=SENHA)
         self.client.post(reverse("item_pegar", args=[self.item.pk]))
-        self.assertEqual(self.ficha.mochila.count(), 1)
+        self.assertEqual(self.ficha.mochila.count(), 2)
 
 
 class TrunfosEEnvioTest(TestCase):
@@ -392,13 +445,88 @@ class TrunfosEEnvioTest(TestCase):
         self.assertEqual(r.status_code, 200)  # sem nenhum item
         self.assertEqual(ItemEncontrado.objects.count(), 0)
 
-    def test_mestre_salva_tabela_de_itens(self):
+
+class CartoesDeItemTest(TestCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls._midia = tempfile.mkdtemp()
+        cls._override = override_settings(MEDIA_ROOT=cls._midia)
+        cls._override.enable()
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._override.disable()
+        shutil.rmtree(cls._midia, ignore_errors=True)
+        super().tearDownClass()
+
+    def setUp(self):
+        self.mestre = User.objects.create_user("mestre", password=SENHA)
+        self.mestre.perfil.papel = Papel.MESTRE
+        self.mestre.perfil.save()
+        self.ana = User.objects.create_user("ana", password=SENHA)
+        self.bruno = User.objects.create_user("bruno", password=SENHA)
+        self.ficha_ana = Ficha.objects.create(jogador=self.ana, nome_personagem="Ana")
+        self.ficha_bruno = Ficha.objects.create(jogador=self.bruno, nome_personagem="Bruno")
+
+    def _novo_cartao(self, nome="Kit médico"):
+        return self.client.post(reverse("item_modelo_criar"), {
+            "nome": nome, "categoria": "Remédios", "descricao": "Bandagens e antisséptico.",
+            "foto": SimpleUploadedFile("kit.png", _imagem_png(), content_type="image/png"),
+        })
+
+    def test_mestre_cria_cartao_com_foto_sem_limite(self):
         self.client.login(username="mestre", password=SENHA)
-        r = self.client.post(reverse("item_modelos"), {
-            "modelo-TOTAL_FORMS": "2", "modelo-INITIAL_FORMS": "0",
-            "modelo-MIN_NUM_FORMS": "0", "modelo-MAX_NUM_FORMS": "1000",
-            "modelo-0-nome": "Bandagem", "modelo-0-categoria": "Remédios",
-            "modelo-1-nome": "", "modelo-1-categoria": "",
+        for n in range(25):  # bem acima de qualquer limite antigo
+            self.assertEqual(self._novo_cartao(f"Item {n}").status_code, 302)
+        self.assertEqual(ItemModelo.objects.count(), 25)
+        self.assertTrue(ItemModelo.objects.first().foto.name.endswith(".jpg"))
+
+    def test_descricao_do_cartao_e_curta(self):
+        self.client.login(username="mestre", password=SENHA)
+        r = self.client.post(reverse("item_modelo_criar"), {"nome": "X", "descricao": "a" * 201})
+        self.assertEqual(r.status_code, 200)
+        self.assertEqual(ItemModelo.objects.count(), 0)
+
+    def test_jogador_nao_acessa_a_tabela(self):
+        self.client.login(username="ana", password=SENHA)
+        for nome, args in [("item_modelos", []), ("item_modelo_criar", [])]:
+            self.assertEqual(self.client.get(reverse(nome, args=args)).status_code, 403)
+
+    def test_envio_copia_a_foto_para_cada_ficha(self):
+        self.client.login(username="mestre", password=SENHA)
+        self._novo_cartao()
+        modelo = ItemModelo.objects.get()
+        r = self.client.post(reverse("item_enviar"), {
+            "fichas": [self.ficha_ana.pk, self.ficha_bruno.pk], f"modelo_{modelo.pk}": 1,
         })
         self.assertEqual(r.status_code, 302)
-        self.assertEqual(ItemModelo.objects.get().nome, "Bandagem")
+        itens = ItemEncontrado.objects.all()
+        self.assertEqual(itens.count(), 2)
+        for item in itens:
+            self.assertTrue(item.foto)
+            self.assertNotEqual(item.foto.name, modelo.foto.name)  # cópia própria
+
+    def test_foto_do_item_so_para_mestre_e_dono(self):
+        self.client.login(username="mestre", password=SENHA)
+        self._novo_cartao()
+        modelo = ItemModelo.objects.get()
+        self.client.post(reverse("item_enviar"), {"fichas": [self.ficha_ana.pk], f"modelo_{modelo.pk}": 1})
+        item = ItemEncontrado.objects.get()
+        self.assertEqual(self.client.get(reverse("item_foto", args=[item.pk])).status_code, 200)
+        self.client.logout()
+        self.client.login(username="ana", password=SENHA)
+        self.assertEqual(self.client.get(reverse("item_foto", args=[item.pk])).status_code, 200)
+        self.assertEqual(self.client.get(reverse("item_modelo_foto", args=[modelo.pk])).status_code, 403)
+        self.client.logout()
+        self.client.login(username="bruno", password=SENHA)
+        self.assertEqual(self.client.get(reverse("item_foto", args=[item.pk])).status_code, 404)
+
+    def test_apagar_cartao_nao_afeta_itens_ja_enviados(self):
+        self.client.login(username="mestre", password=SENHA)
+        self._novo_cartao()
+        modelo = ItemModelo.objects.get()
+        self.client.post(reverse("item_enviar"), {"fichas": [self.ficha_ana.pk], f"modelo_{modelo.pk}": 1})
+        self.client.post(reverse("item_modelo_excluir", args=[modelo.pk]))
+        self.assertFalse(ItemModelo.objects.exists())
+        self.assertTrue(ItemEncontrado.objects.get().foto)
